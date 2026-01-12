@@ -12,6 +12,13 @@ from colorama import init, Fore
 
 init(autoreset=True)
 
+# Import Facebook helper for profile extraction
+try:
+    from facebook_helper import get_facebook_profile_videos
+    FACEBOOK_HELPER_AVAILABLE = True
+except ImportError:
+    FACEBOOK_HELPER_AVAILABLE = False
+
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QPushButton, QTextEdit, QComboBox, QCheckBox, QLabel,
@@ -2160,6 +2167,36 @@ class VideoDownloader:
         try:
             # Platform-specific options for better extraction
             platform = self.detect_platform(profile_url)
+            
+            # Special handling for Facebook - use custom extractor
+            if platform == 'Facebook' and FACEBOOK_HELPER_AVAILABLE:
+                print(f"Using Facebook helper for: {profile_url}")
+                result = get_facebook_profile_videos(profile_url, max_videos, callback=print)
+                
+                if result['success'] and result['videos']:
+                    videos = []
+                    for v in result['videos']:
+                        videos.append({
+                            'url': v['url'],
+                            'title': v.get('title', 'Facebook Video'),
+                            'id': v.get('id', ''),
+                            'duration': 0,
+                            'uploader': 'Facebook',
+                            'upload_date': '',
+                            'view_count': 0
+                        })
+                    
+                    return {
+                        'success': True,
+                        'videos': videos,
+                        'profile_name': 'Facebook Profile',
+                        'total_found': len(videos),
+                        'platform': 'Facebook',
+                        'raw_total': len(videos)
+                    }
+                else:
+                    # Fall back to yt-dlp method
+                    print("Facebook helper failed, trying yt-dlp...")
             
             opts = {
                 'quiet': False,  # Enable some output for debugging
