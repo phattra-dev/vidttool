@@ -3986,15 +3986,23 @@ class MainWindow(QMainWindow):
             app_icon.setText("⬇")
             app_icon.setStyleSheet("font-size: 18px; color: #58a6ff; border: 0px; background: none; outline: 0px;")
         
-        # App title with version
-        app_title = QLabel(f"VIDT - Video Downloader Tool v{self.VERSION}")
+        # App title
+        app_title = QLabel("VIDT - Video Downloader Tool")
         app_title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         app_title.setFrameStyle(QLabel.Shape.NoFrame)
         app_title.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         app_title.setStyleSheet("color: #ffffff; border: 0px; background: none; outline: 0px;")
         
+        # Version label (green color)
+        version_label = QLabel(f"v{self.VERSION}")
+        version_label.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        version_label.setFrameStyle(QLabel.Shape.NoFrame)
+        version_label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        version_label.setStyleSheet("color: #22c55e; border: 0px; background: none; outline: 0px; margin-left: 5px;")
+        
         left_section.addWidget(app_icon)
         left_section.addWidget(app_title)
+        left_section.addWidget(version_label)
         
         # === CENTER: Toolbar Actions ===
         center_section = QHBoxLayout()
