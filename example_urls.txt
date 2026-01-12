@@ -1,0 +1,19 @@
+# Example URLs for batch download
+# Add your video URLs here, one per line
+# Lines starting with # are comments and will be ignored
+
+# YouTube examples
+https://youtube.com/watch?v=dQw4w9WgXcQ
+https://youtu.be/dQw4w9WgXcQ
+
+# TikTok examples (replace with actual URLs)
+# https://tiktok.com/@username/video/1234567890
+
+# Facebook examples (replace with actual URLs)
+# https://facebook.com/watch/?v=1234567890
+
+# Instagram examples (replace with actual URLs)
+# https://instagram.com/p/ABC123DEF456/
+
+# Twitter examples (replace with actual URLs)
+# https://twitter.com/username/status/1234567890
