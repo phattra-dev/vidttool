@@ -1,0 +1,16 @@
+{
+    "name": "VIDT",
+    "version": "1.0.0",
+    "release_date": "2026-01-12",
+    "download_url": "https://github.com/yourusername/vidt/releases/latest/download/VIDT_Setup_1.0.0.exe",
+    "changelog": [
+        "Initial release",
+        "Support for 1000+ video platforms",
+        "YouTube, TikTok, Instagram, Facebook downloads",
+        "4K quality support",
+        "MP3 audio extraction",
+        "Batch download support"
+    ],
+    "min_os": "Windows 10",
+    "file_size": "~25MB"
+}
