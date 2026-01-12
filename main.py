@@ -2663,6 +2663,8 @@ class Worker(QThread):
 
 
 class MainWindow(QMainWindow):
+    VERSION = "1.1.0"
+    
     def __init__(self):
         super().__init__()
         self.dl = VideoDownloader()
@@ -2738,7 +2740,7 @@ class MainWindow(QMainWindow):
 
     def show_welcome_message(self):
         """Show welcome message in log since it doesn't persist"""
-        self.log("🎬 Video Downloader Tool - Ready!")
+        self.log(f"🎬 VIDT v{self.VERSION} - Ready!")
         self.log("💡 Tip: Use the Help button (❓) in Multiple Download tab for URL format guidance")
         self.log("📋 Paste video URLs and click 'Get Info' to check compatibility")
         self.log("⚙️ All your settings and URLs are automatically saved")
@@ -2801,7 +2803,7 @@ class MainWindow(QMainWindow):
     def setup_ui(self):
         # Remove default window frame to create custom title bar
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
-        self.setWindowTitle("Video Downloader Tool")
+        self.setWindowTitle(f"VIDT v{self.VERSION}")
         self.setFixedSize(1400, 750)
         self.center_window()
         
@@ -3984,8 +3986,8 @@ class MainWindow(QMainWindow):
             app_icon.setText("⬇")
             app_icon.setStyleSheet("font-size: 18px; color: #58a6ff; border: 0px; background: none; outline: 0px;")
         
-        # App title
-        app_title = QLabel("Video Downloader Tool")
+        # App title with version
+        app_title = QLabel(f"VIDT v{self.VERSION}")
         app_title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         app_title.setFrameStyle(QLabel.Shape.NoFrame)
         app_title.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -5991,7 +5993,7 @@ class MainWindow(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
-    app.setApplicationName("Video Downloader Tool")
+    app.setApplicationName("VIDT")
     
     # Set app icon - try multiple paths for dev and EXE
     logo_paths = [
