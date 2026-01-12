@@ -295,16 +295,16 @@ class MultipleVideoInfoDialog(QDialog):
         self.setFixedSize(600, 500)
         self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.WindowCloseButtonHint)
         
-        # Apply dark theme styling
+        # Apply modern dark theme styling
         self.setStyleSheet("""
             QDialog {
-                background: #161b22;
-                color: #f0f6fc;
-                border: 2px solid #30363d;
-                border-radius: 12px;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1e1e2e, stop:1 #11111b);
+                color: #cdd6f4;
+                border: 1px solid #45475a;
+                border-radius: 16px;
             }
             QLabel {
-                color: #f0f6fc;
+                color: #cdd6f4;
                 font-size: 12px;
                 border: none;
                 background: transparent;
@@ -514,36 +514,42 @@ class MultipleVideoInfoDialog(QDialog):
     def style_button_primary(self, btn):
         btn.setStyleSheet("""
             QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #238636, stop:1 #2ea043);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #6366f1, stop:1 #4f46e5);
                 color: white;
                 border: none;
-                border-radius: 8px;
+                border-radius: 10px;
                 font-size: 13px;
                 font-weight: bold;
-                padding: 8px 16px;
+                padding: 10px 20px;
                 min-width: 80px;
             }
             QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2ea043, stop:1 #238636);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #818cf8, stop:1 #6366f1);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4f46e5, stop:1 #4338ca);
             }
         """)
     
     def style_button_secondary(self, btn):
         btn.setStyleSheet("""
             QPushButton {
-                background: rgba(33, 38, 45, 0.8);
-                color: #f0f6fc;
-                border: 2px solid #30363d;
-                border-radius: 8px;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #374151, stop:1 #1f2937);
+                color: #e5e7eb;
+                border: 1px solid #4b5563;
+                border-radius: 10px;
                 font-size: 12px;
-                font-weight: bold;
-                padding: 8px 16px;
+                font-weight: 600;
+                padding: 10px 20px;
                 min-width: 100px;
             }
             QPushButton:hover {
-                border-color: #58a6ff;
-                background: rgba(22, 27, 34, 0.9);
-                color: #58a6ff;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4b5563, stop:1 #374151);
+                border-color: #6366f1;
+                color: #f3f4f6;
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1f2937, stop:1 #111827);
             }
         """)
 
@@ -1019,39 +1025,39 @@ Views: {views_str}"""
     def style_button_primary(self, btn):
         btn.setStyleSheet("""
             QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #238636, stop:1 #2ea043);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #6366f1, stop:1 #4f46e5);
                 color: white;
                 border: none;
-                border-radius: 8px;
+                border-radius: 10px;
                 font-size: 13px;
                 font-weight: bold;
-                padding: 8px 16px;
+                padding: 10px 20px;
                 min-width: 80px;
             }
             QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2ea043, stop:1 #238636);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #818cf8, stop:1 #6366f1);
             }
             QPushButton:pressed {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1e6f2f, stop:1 #238636);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4f46e5, stop:1 #4338ca);
             }
         """)
     
     def style_button_secondary(self, btn):
         btn.setStyleSheet("""
             QPushButton {
-                background: rgba(33, 38, 45, 0.8);
-                color: #f0f6fc;
-                border: 2px solid #30363d;
-                border-radius: 8px;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #374151, stop:1 #1f2937);
+                color: #e5e7eb;
+                border: 1px solid #4b5563;
+                border-radius: 10px;
                 font-size: 12px;
-                font-weight: bold;
-                padding: 8px 16px;
+                font-weight: 600;
+                padding: 10px 20px;
                 min-width: 80px;
             }
             QPushButton:hover {
-                border-color: #58a6ff;
-                background: rgba(22, 27, 34, 0.9);
-                color: #58a6ff;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4b5563, stop:1 #374151);
+                border-color: #6366f1;
+                color: #f3f4f6;
             }
             QPushButton:pressed {
                 background: rgba(88, 166, 255, 0.1);
@@ -4351,59 +4357,72 @@ class MainWindow(QMainWindow):
     def style_btn_green(self, btn):
         btn.setStyleSheet("""
             QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #10b981, stop:1 #059669);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #22c55e, stop:1 #16a34a);
                 color: white;
                 border: none;
-                border-radius: 8px;
+                border-radius: 10px;
                 font-size: 13px;
                 font-weight: bold;
-                padding: 0 20px;
+                padding: 8px 24px;
             }
             QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #059669, stop:1 #047857);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4ade80, stop:1 #22c55e);
             }
             QPushButton:pressed {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #047857, stop:1 #065f46);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #16a34a, stop:1 #15803d);
             }
             QPushButton:disabled {
-                background: #30363d;
-                color: #7d8590;
+                background: #374151;
+                color: #6b7280;
             }
         """)
     
     def style_btn_primary(self, btn):
         btn.setStyleSheet("""
             QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #238636, stop:1 #2ea043);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #6366f1, stop:1 #4f46e5);
                 color: white;
                 border: none;
-                border-radius: 6px;
+                border-radius: 10px;
                 font-size: 13px;
                 font-weight: bold;
-                padding: 0 20px;
+                padding: 8px 24px;
             }
             QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2ea043, stop:1 #238636);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #818cf8, stop:1 #6366f1);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4f46e5, stop:1 #4338ca);
             }
             QPushButton:disabled {
-                background: #30363d;
-                color: #7d8590;
+                background: #374151;
+                color: #6b7280;
             }
         """)
     
     def style_btn_secondary(self, btn):
         btn.setStyleSheet("""
             QPushButton {
-                background: #21262d;
-                color: #f0f6fc;
-                border: 2px solid #30363d;
-                border-radius: 6px;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #374151, stop:1 #1f2937);
+                color: #e5e7eb;
+                border: 1px solid #4b5563;
+                border-radius: 10px;
                 font-size: 12px;
-                font-weight: bold;
+                font-weight: 600;
+                padding: 8px 16px;
             }
             QPushButton:hover {
-                border-color: #58a6ff;
-                background: #161b22;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4b5563, stop:1 #374151);
+                border-color: #6366f1;
+                color: #f3f4f6;
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1f2937, stop:1 #111827);
+            }
+            QPushButton:disabled {
+                background: #1f2937;
+                color: #4b5563;
+                border-color: #374151;
             }
         """)
     
