@@ -4452,16 +4452,16 @@ class MainWindow(QMainWindow):
         dialog = QDialog(self)
         dialog.setWindowTitle("Settings")
         dialog.setFixedSize(350, 250)
-        dialog.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+        dialog.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.WindowCloseButtonHint)
         dialog.setStyleSheet("""
             QDialog {
-                background: #2a2a3a;
-                color: #ffffff;
-                border: 2px solid #404040;
-                border-radius: 12px;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1e1e2e, stop:1 #11111b);
+                color: #cdd6f4;
+                border: 1px solid #45475a;
+                border-radius: 16px;
             }
             QLabel {
-                color: #ffffff;
+                color: #cdd6f4;
                 font-size: 12px;
                 border: none;
             }
@@ -4472,9 +4472,9 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(25, 25, 25, 25)
         
         # Title
-        title = QLabel("Application Settings")
+        title = QLabel("⚙️ Application Settings")
         title.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
-        title.setStyleSheet("color: #00ff88; font-size: 14px;")
+        title.setStyleSheet("color: #89b4fa; font-size: 14px;")
         layout.addWidget(title)
         
         # Settings options
@@ -4524,6 +4524,12 @@ class MainWindow(QMainWindow):
         btn_layout.addWidget(ok_btn)
         
         layout.addLayout(btn_layout)
+        
+        # Center the dialog on parent window
+        dialog.move(
+            self.x() + (self.width() - dialog.width()) // 2,
+            self.y() + (self.height() - dialog.height()) // 2
+        )
         
         dialog.exec()
         self.log("⚙️ Settings accessed")
