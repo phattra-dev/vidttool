@@ -2644,9 +2644,17 @@ class Worker(QThread):
     def __init__(self, dl, url, opts):
         super().__init__()
         self.dl, self.url, self.opts = dl, url, opts
+        self.stopped = False
+    
+    def stop(self):
+        """Stop the worker"""
+        self.stopped = True
     
     def run(self):
         try:
+            if self.stopped:
+                return
+                
             if self.opts.get('op') == 'info':
                 self.progress_percent.emit(10, "Connecting...")
                 self.progress.emit("🔍 Getting video information...")
@@ -3864,8 +3872,16 @@ class MainWindow(QMainWindow):
         """Stop multiple downloads"""
         if self.multi_worker:
             self.multi_worker.stop()
+            # Force terminate if still running after a short wait
+            if self.multi_worker.isRunning():
+                self.multi_worker.terminate()
+                self.multi_worker.wait(2000)  # Wait up to 2 seconds
             self.multi_log("⏹ Downloads stopped by user")
             self.update_multi_status("Stopped")
+            # Reset UI
+            self.multi_download_btn.setEnabled(True)
+            self.multi_pause_btn.setEnabled(False)
+            self.multi_stop_btn.setEnabled(False)
     
     def handle_multi_progress_dialog_close(self, result):
         """Handle when multiple progress dialog is closed"""
@@ -5338,11 +5354,16 @@ class MainWindow(QMainWindow):
     
     def stop_profile_downloads(self):
         """Stop profile downloads"""
-        if hasattr(self, 'profile_multi_worker'):
+        if hasattr(self, 'profile_multi_worker') and self.profile_multi_worker:
             self.profile_multi_worker.stop()
-            self.profile_status_label.setText("Stopping profile downloads...")
-            if hasattr(self, 'profile_multi_progress_dialog'):
-                self.profile_multi_progress_dialog.close()
+            # Force terminate if still running
+            if self.profile_multi_worker.isRunning():
+                self.profile_multi_worker.terminate()
+                self.profile_multi_worker.wait(2000)
+            self.profile_status_label.setText("Downloads stopped")
+            self.profile_log("⏹ Profile downloads stopped by user")
+        if hasattr(self, 'profile_multi_progress_dialog') and self.profile_multi_progress_dialog:
+            self.profile_multi_progress_dialog.close()
     
     def handle_profile_tab_result(self, success, data, progress_dialog):
         """Handle profile info result from profile tab"""
@@ -5536,8 +5557,9 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'progress_dialog') and self.progress_dialog.cancelled:
             # User cancelled the operation
             if self.worker and self.worker.isRunning():
-                self.worker.terminate()  # Stop the worker thread
-                self.worker.wait()       # Wait for it to finish
+                self.worker.stop()  # Set stop flag first
+                self.worker.terminate()  # Force stop the worker thread
+                self.worker.wait(2000)  # Wait up to 2 seconds
             
             # Reset UI state
             self.dl_btn.setEnabled(True)
