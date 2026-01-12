@@ -2011,6 +2011,7 @@ class MultipleDownloadWorker(QThread):
         self.settings = settings
         self.paused = False
         self.stopped = False
+        self._current_download_aborted = False
         
     def run(self):
         total_urls = len(self.urls)
@@ -2021,6 +2022,7 @@ class MultipleDownloadWorker(QThread):
         
         for i, url in enumerate(self.urls):
             if self.stopped:
+                self.progress.emit("⏹ Downloads stopped by user")
                 break
                 
             # Wait if paused
@@ -2028,14 +2030,19 @@ class MultipleDownloadWorker(QThread):
                 self.msleep(100)
                 
             if self.stopped:
+                self.progress.emit("⏹ Downloads stopped by user")
                 break
-                
+            
+            self._current_download_aborted = False
             self.video_started.emit(i, url)
             self.progress.emit(f"📥 Starting download {i+1}/{total_urls}: {url[:50]}...")
             
             try:
-                # Create progress callback for current video
+                # Create progress callback for current video that checks stop flag
                 def progress_callback(message):
+                    if self.stopped:
+                        self._current_download_aborted = True
+                        raise Exception("Download stopped by user")
                     self.progress.emit(f"[{i+1}/{total_urls}] {message}")
                     # Try to extract percentage from yt-dlp progress messages
                     if "%" in message and "Downloading:" in message:
@@ -2061,6 +2068,10 @@ class MultipleDownloadWorker(QThread):
                     progress_callback
                 )
                 
+                if self.stopped or self._current_download_aborted:
+                    self.progress.emit("⏹ Downloads stopped by user")
+                    break
+                
                 if result['success']:
                     completed += 1
                     file_path = str(result['file_path']) if result['file_path'] else ""
@@ -2074,6 +2085,9 @@ class MultipleDownloadWorker(QThread):
                     self.progress.emit(f"❌ Failed {i+1}/{total_urls}: {url[:50]}")
                     
             except Exception as e:
+                if self.stopped or "stopped by user" in str(e).lower():
+                    self.progress.emit("⏹ Downloads stopped by user")
+                    break
                 failed += 1
                 failed_urls.append(url)
                 self.video_completed.emit(i, False, f"Error: {str(e)}", "")
