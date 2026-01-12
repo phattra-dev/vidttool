@@ -2137,11 +2137,16 @@ class VideoDownloader:
             # Instagram profile: instagram.com/username (without /p/ or /reel/)
             return '/p/' not in clean_url and '/reel/' not in clean_url and '/stories/' not in clean_url
         
-        # Facebook profile/page patterns
-        elif 'facebook.com' in clean_url:
-            return any(pattern in clean_url for pattern in [
-                '/profile.php', '/pages/', '/people/'
-            ]) or ('/watch/' not in clean_url and '/videos/' not in clean_url)
+        # Facebook profile/page patterns - including reels and videos pages
+        elif 'facebook.com' in clean_url or 'fb.watch' in clean_url:
+            # Detect profile/page video collections
+            profile_patterns = [
+                '/videos', '/reels', '/profile.php', '/pages/', '/people/'
+            ]
+            # Check if it's a profile/page URL (not a single video)
+            is_single_video = '/watch/?v=' in url or '/reel/' in clean_url
+            is_profile = any(pattern in clean_url for pattern in profile_patterns)
+            return is_profile and not is_single_video
         
         # Twitter profile patterns
         elif 'twitter.com' in clean_url or 'x.com' in clean_url:
@@ -2186,6 +2191,13 @@ class VideoDownloader:
                 opts.update({
                     'playlistreverse': False,  # Get newest first
                 })
+            elif platform == 'Facebook':
+                # Facebook-specific options - try to use cookies from browser
+                opts.update({
+                    'cookiesfrombrowser': ('chrome',),  # Try Chrome cookies first
+                })
+                # Also try without extract_flat for Facebook
+                opts['extract_flat'] = 'in_playlist'
             
             print(f"Extracting videos from {platform} profile: {profile_url}")
             print(f"Max videos limit: {max_videos if max_videos else 'No limit'}")
