@@ -2113,6 +2113,9 @@ class MultipleDownloadWorker(QThread):
     def stop(self):
         self.stopped = True
         self.paused = False
+        # Also set abort flag on downloader
+        if hasattr(self.dl, 'abort_download'):
+            self.dl.abort_download = True
 
 
 class VideoDownloader:
@@ -2120,6 +2123,7 @@ class VideoDownloader:
     def __init__(self, output_dir="downloads"):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
+        self.abort_download = False  # Flag to abort current download
         self.platforms = {
             'youtube.com': 'YouTube', 'youtu.be': 'YouTube',
             'tiktok.com': 'TikTok', 'facebook.com': 'Facebook',
@@ -2445,6 +2449,9 @@ class VideoDownloader:
         return filename
 
     def download(self, url, quality='best', audio_only=False, subtitle=False, format_pref='Force H.264 (Compatible)', force_convert=False, use_caption=True, mute_video=False, callback=None):
+        # Reset abort flag at start of each download
+        self.abort_download = False
+        
         # Detect platform to use appropriate filename template
         platform = self.detect_platform(url)
         
@@ -2473,13 +2480,24 @@ class VideoDownloader:
                 'FFmpegVideoRemuxer': ['-an']  # -an removes audio
             }
         
+        # Create abort-aware callback wrapper
+        original_callback = callback
+        def abort_aware_callback(msg):
+            if self.abort_download:
+                raise Exception("Download aborted by user")
+            if original_callback:
+                original_callback(msg)
+        
         if callback:
             def hook(d):
+                # Check abort flag on every progress update
+                if self.abort_download:
+                    raise Exception("Download aborted by user")
                 if d['status'] == 'downloading' and 'total_bytes' in d:
                     pct = d['downloaded_bytes'] / d['total_bytes'] * 100
-                    callback(f"Downloading: {pct:.1f}%")
+                    abort_aware_callback(f"Downloading: {pct:.1f}%")
                 elif d['status'] == 'finished':
-                    callback(f"✓ Completed: {d['filename']}")
+                    abort_aware_callback(f"✓ Completed: {d['filename']}")
             opts['progress_hooks'] = [hook]
         
         # For TikTok, first get info and clean the description, then download
@@ -5369,13 +5387,23 @@ class MainWindow(QMainWindow):
     def stop_profile_downloads(self):
         """Stop profile downloads"""
         if hasattr(self, 'profile_multi_worker') and self.profile_multi_worker:
+            self.profile_multi_worker.stopped = True
             self.profile_multi_worker.stop()
+            self.profile_status_label.setText("Stopping downloads...")
+            self.profile_log("⏹ Stopping profile downloads...")
+            
+            # Give it a moment to stop gracefully
+            self.profile_multi_worker.wait(500)
+            
             # Force terminate if still running
             if self.profile_multi_worker.isRunning():
+                self.profile_log("⚠️ Force stopping download thread...")
                 self.profile_multi_worker.terminate()
-                self.profile_multi_worker.wait(2000)
+                self.profile_multi_worker.wait(1000)
+            
             self.profile_status_label.setText("Downloads stopped")
             self.profile_log("⏹ Profile downloads stopped by user")
+            
         if hasattr(self, 'profile_multi_progress_dialog') and self.profile_multi_progress_dialog:
             self.profile_multi_progress_dialog.close()
     
