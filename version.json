@@ -2,7 +2,7 @@
     "name": "VIDT",
     "version": "1.1.8",
     "release_date": "2026-01-14",
-    "download_url": "https://github.com/phattra-dev/vidttool/releases/latest/download/VIDT_Setup_1.1.8.exe",
+    "download_url": "https://github.com/phattra-dev/vidttool/releases/download/v1.1.8/VIDT_Setup_1.1.8.exe",
     "changelog": [
         "NEW: License activation system with real-time validation",
         "NEW: Professional admin dashboard for license management",
