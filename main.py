@@ -4424,7 +4424,7 @@ class Worker(QThread):
 
 
 class MainWindow(QMainWindow):
-    VERSION = "1.1.8"
+    VERSION = "1.1.9"
     APP_ID = None  # Unique installation ID
     
     def __init__(self):
