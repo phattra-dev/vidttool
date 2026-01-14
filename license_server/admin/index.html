@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>License Admin Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg-primary: #0d1117; --bg-secondary: #161b22; --bg-tertiary: #21262d;
+            --border-color: #30363d; --text-primary: #f0f6fc; --text-secondary: #8b949e;
+            --accent-blue: #58a6ff; --accent-green: #3fb950; --accent-red: #f85149;
+            --accent-yellow: #d29922; --accent-purple: #a371f7; --accent-cyan: #39d4d4;
+        }
+        body { font-family: 'Inter', sans-serif; background: var(--bg-primary); color: var(--text-primary); min-height: 100vh; }
+        
+        /* Login Screen */
+        .login-container { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+        .login-box { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 16px; padding: 48px; width: 100%; max-width: 480px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+        .login-box h1 { font-size: 28px; margin-bottom: 8px; text-align: center; display: flex; align-items: center; justify-content: center; gap: 12px; }
+        .login-box > p { color: var(--text-secondary); text-align: center; margin-bottom: 32px; font-size: 14px; }
+        
+        /* Form Elements */
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 8px; font-size: 13px; color: var(--text-secondary); font-weight: 500; }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%; padding: 12px 16px; background: var(--bg-tertiary); border: 1px solid var(--border-color);
+            border-radius: 8px; color: var(--text-primary); font-size: 14px; transition: all 0.2s;
+        }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--accent-blue); box-shadow: 0 0 0 3px rgba(88,166,255,0.1); }
+        
+        /* Buttons */
+        .btn { padding: 12px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 8px; }
+        .btn-primary { background: var(--accent-blue); color: white; }
+        .btn-primary:hover { background: #4c9aed; transform: translateY(-1px); }
+        .btn-success { background: var(--accent-green); color: white; }
+        .btn-success:hover { background: #2ea043; }
+        .btn-danger { background: var(--accent-red); color: white; }
+        .btn-danger:hover { background: #da3633; }
+        .btn-secondary { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background: var(--border-color); }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+        .btn-icon { width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 6px; }
+        
+        /* Dashboard Layout */
+        .dashboard { display: none; }
+        .sidebar { position: fixed; left: 0; top: 0; width: 280px; height: 100vh; background: var(--bg-secondary); border-right: 1px solid var(--border-color); padding: 24px 16px; display: flex; flex-direction: column; }
+        .sidebar-logo { display: flex; align-items: center; gap: 12px; padding: 0 8px 24px; border-bottom: 1px solid var(--border-color); margin-bottom: 24px; }
+        .sidebar-logo i { font-size: 28px; color: var(--accent-blue); }
+        .sidebar-logo span { font-size: 18px; font-weight: 700; }
+        
+        .nav-section { margin-bottom: 24px; }
+        .nav-section-title { font-size: 11px; text-transform: uppercase; color: var(--text-secondary); padding: 0 12px; margin-bottom: 8px; letter-spacing: 0.5px; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 8px; color: var(--text-secondary); cursor: pointer; margin-bottom: 4px; transition: all 0.2s; }
+        .nav-item i { font-size: 18px; width: 20px; }
+        .nav-item:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+        .nav-item.active { background: rgba(88, 166, 255, 0.15); color: var(--accent-blue); }
+        .nav-item .badge { margin-left: auto; background: var(--accent-blue); color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+        
+        .sidebar-footer { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--border-color); }
+        
+        /* Main Content */
+        .main-content { margin-left: 280px; padding: 32px; min-height: 100vh; }
+        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; }
+        .page-header h1 { font-size: 28px; font-weight: 700; }
+        .page-header-actions { display: flex; gap: 12px; }
+        
+        /* Stats Grid */
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 32px; }
+        .stat-card { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 12px; padding: 24px; position: relative; overflow: hidden; }
+        .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+        .stat-card.blue::before { background: var(--accent-blue); }
+        .stat-card.green::before { background: var(--accent-green); }
+        .stat-card.red::before { background: var(--accent-red); }
+        .stat-card.purple::before { background: var(--accent-purple); }
+        .stat-card.yellow::before { background: var(--accent-yellow); }
+        .stat-card.cyan::before { background: var(--accent-cyan); }
+        .stat-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+        .stat-card-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+        .stat-card.blue .stat-card-icon { background: rgba(88,166,255,0.15); color: var(--accent-blue); }
+        .stat-card.green .stat-card-icon { background: rgba(63,185,80,0.15); color: var(--accent-green); }
+        .stat-card.red .stat-card-icon { background: rgba(248,81,73,0.15); color: var(--accent-red); }
+        .stat-card.purple .stat-card-icon { background: rgba(163,113,247,0.15); color: var(--accent-purple); }
+        .stat-card.yellow .stat-card-icon { background: rgba(210,153,34,0.15); color: var(--accent-yellow); }
+        .stat-card.cyan .stat-card-icon { background: rgba(57,212,212,0.15); color: var(--accent-cyan); }
+        .stat-card .label { color: var(--text-secondary); font-size: 13px; margin-bottom: 4px; }
+        .stat-card .value { font-size: 32px; font-weight: 700; }
+        .stat-card.blue .value { color: var(--accent-blue); }
+        .stat-card.green .value { color: var(--accent-green); }
+        .stat-card.red .value { color: var(--accent-red); }
+        .stat-card.purple .value { color: var(--accent-purple); }
+        .stat-card.yellow .value { color: var(--accent-yellow); }
+        .stat-card.cyan .value { color: var(--accent-cyan); }
+        .stat-card .trend { font-size: 12px; color: var(--text-secondary); margin-top: 8px; }
+        .stat-card .trend.up { color: var(--accent-green); }
+        .stat-card .trend.down { color: var(--accent-red); }
+</style>
+</head>
+<body>
+    <div class="toast-container" id="toastContainer"></div>
+    
+    <!-- Login Screen -->
+    <div class="login-container" id="loginScreen">
+        <div class="login-box">
+            <h1><i class="bi bi-shield-lock"></i> License Admin</h1>
+            <p>Connect to your Supabase project to manage licenses</p>
+            <div class="form-group">
+                <label>Supabase URL</label>
+                <input type="text" id="supabaseUrl" placeholder="https://your-project.supabase.co">
+            </div>
+            <div class="form-group">
+                <label>Service Role Key</label>
+                <input type="password" id="supabaseKey" placeholder="eyJhbGciOiJIUzI1NiIs...">
+            </div>
+            <button class="btn btn-primary" style="width:100%" id="connectBtn" onclick="login()">
+                <i class="bi bi-plug"></i> Connect to Database
+            </button>
+            <div id="statusMsg" class="status-msg" style="display:none;margin-top:16px;text-align:center;"></div>
+        </div>
+    </div>
+</body>
+</html>
+
+    <!-- Dashboard -->
+    <div class="dashboard" id="dashboard">
+        <div class="sidebar">
+            <div class="sidebar-logo">
+                <i class="bi bi-shield-lock-fill"></i>
+                <span>License Admin</span>
+            </div>
+            
+            <div class="nav-section">
+                <div class="nav-section-title">Main</div>
+                <div class="nav-item active" onclick="showPage('overview', this)">
+                    <i class="bi bi-grid-1x2"></i> Dashboard
+                </div>
+                <div class="nav-item" onclick="showPage('licenses', this)">
+                    <i class="bi bi-key"></i> Licenses
+                    <span class="badge" id="navLicenseCount">0</span>
+                </div>
+                <div class="nav-item" onclick="showPage('activations', this)">
+                    <i class="bi bi-pc-display"></i> Activations
+                </div>
+            </div>
+            
+            <div class="nav-section">
+                <div class="nav-section-title">Tools</div>
+                <div class="nav-item" onclick="showPage('analytics', this)">
+                    <i class="bi bi-graph-up"></i> Analytics
+                </div>
+                <div class="nav-item" onclick="showPage('logs', this)">
+                    <i class="bi bi-journal-text"></i> Activity Logs
+                </div>
+                <div class="nav-item" onclick="showPage('settings', this)">
+                    <i class="bi bi-gear"></i> Settings
+                </div>
+            </div>
+            
+            <div class="sidebar-footer">
+                <div class="nav-item" onclick="logout()" style="color: var(--accent-red);">
+                    <i class="bi bi-box-arrow-left"></i> Logout
+                </div>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <!-- Overview Page -->
+            <div class="page-section active" id="page-overview">
+                <div class="page-header">
+                    <h1>Dashboard Overview</h1>
+                    <div class="page-header-actions">
+                        <button class="btn btn-secondary" onclick="loadStats()"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+                        <button class="btn btn-primary" onclick="showModal('createModal')"><i class="bi bi-plus-lg"></i> New License</button>
+                    </div>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-card blue">
+                        <div class="stat-card-header">
+                            <div class="stat-card-icon"><i class="bi bi-key"></i></div>
+                        </div>
+                        <div class="label">Total Licenses</div>
+                        <div class="value" id="statTotal">0</div>
+                        <div class="trend" id="trendTotal"></div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="stat-card-header">
+                            <div class="stat-card-icon"><i class="bi bi-check-circle"></i></div>
+                        </div>
+                        <div class="label">Active Licenses</div>
+                        <div class="value" id="statActive">0</div>
+                        <div class="trend up" id="trendActive"></div>
+                    </div>
+                    <div class="stat-card red">
+                        <div class="stat-card-header">
+                            <div class="stat-card-icon"><i class="bi bi-clock-history"></i></div>
+                        </div>
+                        <div class="label">Expired</div>
+                        <div class="value" id="statExpired">0</div>
+                    </div>
+                    <div class="stat-card purple">
+                        <div class="stat-card-header">
+                            <div class="stat-card-icon"><i class="bi bi-pc-display"></i></div>
+                        </div>
+                        <div class="label">Total Activations</div>
+                        <div class="value" id="statActivations">0</div>
+                    </div>
+                </div>
+                
+                <!-- Quick Stats Row 2 -->
+                <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="stat-card yellow">
+                        <div class="stat-card-header">
+                            <div class="stat-card-icon"><i class="bi bi-exclamation-triangle"></i></div>
+                        </div>
+                        <div class="label">Expiring Soon (7 days)</div>
+                        <div class="value" id="statExpiringSoon">0</div>
+                    </div>
+                    <div class="stat-card cyan">
+                        <div class="stat-card-header">
+                            <div class="stat-card-icon"><i class="bi bi-activity"></i></div>
+                        </div>
+                        <div class="label">Active Today</div>
+                        <div class="value" id="statActiveToday">0</div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="stat-card-header">
+                            <div class="stat-card-icon"><i class="bi bi-infinity"></i></div>
+                        </div>
+                        <div class="label">Lifetime Licenses</div>
+                        <div class="value" id="statLifetime">0</div>
+                    </div>
+                </div>
+                
+                <!-- Recent Activity -->
+                <div class="table-container" style="margin-top: 24px;">
+                    <div class="table-header">
+                        <h2><i class="bi bi-clock-history"></i> Recent Activity</h2>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr><th>Action</th><th>License</th><th>Details</th><th>Time</th></tr>
+                        </thead>
+                        <tbody id="recentActivityTable"></tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Licenses Page -->
+            <div class="page-section" id="page-licenses">
+                <div class="page-header">
+                    <h1>License Management</h1>
+                    <div class="page-header-actions">
+                        <button class="btn btn-secondary" onclick="exportLicenses()"><i class="bi bi-download"></i> Export</button>
+                        <button class="btn btn-secondary" onclick="showModal('bulkModal')"><i class="bi bi-collection"></i> Bulk Generate</button>
+                        <button class="btn btn-primary" onclick="showModal('createModal')"><i class="bi bi-plus-lg"></i> New License</button>
+                    </div>
+                </div>
+                
+                <!-- Filters -->
+                <div class="filters-bar">
+                    <div class="search-box">
+                        <i class="bi bi-search"></i>
+                        <input type="text" id="searchInput" placeholder="Search by key, email, or name..." oninput="filterTable()">
+                    </div>
+                    <div class="filter-group">
+                        <select id="filterStatus" onchange="filterTable()">
+                            <option value="">All Status</option>
+                            <option value="active">Active</option>
+                            <option value="disabled">Disabled</option>
+                            <option value="expired">Expired</option>
+                        </select>
+                        <select id="filterType" onchange="filterTable()">
+                            <option value="">All Types</option>
+                            <option value="standard">Standard</option>
+                            <option value="pro">Pro</option>
+                            <option value="enterprise">Enterprise</option>
+                            <option value="lifetime">Lifetime</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+                                <th>License Key</th>
+                                <th>Customer</th>
+                                <th>Type</th>
+                                <th>Devices</th>
+                                <th>Status</th>
+                                <th>Expires</th>
+                                <th>Last Seen</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="licenseTable"></tbody>
+                    </table>
+                </div>
+                
+                <!-- Bulk Actions -->
+                <div class="bulk-actions" id="bulkActions" style="display:none;">
+                    <span id="selectedCount">0 selected</span>
+                    <button class="btn btn-sm btn-secondary" onclick="bulkEnable()"><i class="bi bi-check-circle"></i> Enable</button>
+                    <button class="btn btn-sm btn-secondary" onclick="bulkDisable()"><i class="bi bi-x-circle"></i> Disable</button>
+                    <button class="btn btn-sm btn-danger" onclick="bulkDelete()"><i class="bi bi-trash"></i> Delete</button>
+                </div>
+            </div>
+            
+            <!-- Activations Page -->
+            <div class="page-section" id="page-activations">
+                <div class="page-header">
+                    <h1>Device Activations</h1>
+                    <div class="page-header-actions">
+                        <button class="btn btn-secondary" onclick="loadActivations()"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr><th>License Key</th><th>Machine ID</th><th>Activated</th><th>IP Address</th><th>App Version</th><th>Platform</th></tr>
+                        </thead>
+                        <tbody id="activationTable"></tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Analytics Page -->
+            <div class="page-section" id="page-analytics">
+                <div class="page-header">
+                    <h1>Analytics</h1>
+                </div>
+                <div class="stats-grid" style="grid-template-columns: repeat(2, 1fr);">
+                    <div class="chart-card">
+                        <h3><i class="bi bi-pie-chart"></i> License Types Distribution</h3>
+                        <div id="typeChart" class="chart-placeholder"></div>
+                    </div>
+                    <div class="chart-card">
+                        <h3><i class="bi bi-bar-chart"></i> Activations by Day</h3>
+                        <div id="activationChart" class="chart-placeholder"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Logs Page -->
+            <div class="page-section" id="page-logs">
+                <div class="page-header">
+                    <h1>Activity Logs</h1>
+                    <div class="page-header-actions">
+                        <button class="btn btn-secondary" onclick="loadLogs()"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+                        <button class="btn btn-secondary" onclick="clearLogs()"><i class="bi bi-trash"></i> Clear Old Logs</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr><th>Timestamp</th><th>Action</th><th>Details</th><th>IP</th></tr>
+                        </thead>
+                        <tbody id="logsTable"></tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Settings Page -->
+            <div class="page-section" id="page-settings">
+                <div class="page-header">
+                    <h1>Settings</h1>
+                </div>
+                <div class="settings-card">
+                    <h3><i class="bi bi-database"></i> Database Connection</h3>
+                    <p>Connected to: <strong id="connectedUrl"></strong></p>
+                    <button class="btn btn-secondary" onclick="logout()"><i class="bi bi-plug"></i> Disconnect</button>
+                </div>
+                <div class="settings-card">
+                    <h3><i class="bi bi-shield-check"></i> Security</h3>
+                    <p>Using service role key for admin operations</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create License Modal -->
+    <div class="modal-overlay" id="createModal" onclick="if(event.target===this)closeModal('createModal')">
+        <div class="modal">
+            <div class="modal-header">
+                <h2><i class="bi bi-plus-circle"></i> Create New License</h2>
+                <button class="modal-close" onclick="closeModal('createModal')"><i class="bi bi-x-lg"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="newEmail" placeholder="customer@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Name</label>
+                        <input type="text" id="newName" placeholder="Customer Name">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>License Type</label>
+                        <select id="newType">
+                            <option value="standard">Standard</option>
+                            <option value="pro">Pro</option>
+                            <option value="enterprise">Enterprise</option>
+                            <option value="lifetime">Lifetime</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Max Devices</label>
+                        <input type="number" id="newDevices" value="1" min="1" max="100">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Duration (days, 0 = lifetime)</label>
+                        <input type="number" id="newDays" value="365" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Custom Message</label>
+                        <input type="text" id="newMessage" placeholder="Optional message for user">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Notes (internal)</label>
+                    <textarea id="newNotes" rows="2" placeholder="Internal notes..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('createModal')">Cancel</button>
+                <button class="btn btn-success" onclick="createLicense()"><i class="bi bi-check-lg"></i> Create License</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Bulk Generate Modal -->
+    <div class="modal-overlay" id="bulkModal" onclick="if(event.target===this)closeModal('bulkModal')">
+        <div class="modal">
+            <div class="modal-header">
+                <h2><i class="bi bi-collection"></i> Bulk Generate Licenses</h2>
+                <button class="modal-close" onclick="closeModal('bulkModal')"><i class="bi bi-x-lg"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Number of Licenses</label>
+                        <input type="number" id="bulkCount" value="10" min="1" max="100">
+                    </div>
+                    <div class="form-group">
+                        <label>License Type</label>
+                        <select id="bulkType">
+                            <option value="standard">Standard</option>
+                            <option value="pro">Pro</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Duration (days)</label>
+                        <input type="number" id="bulkDays" value="365" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Max Devices Each</label>
+                        <input type="number" id="bulkDevices" value="1" min="1">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Batch Name</label>
+                    <input type="text" id="bulkName" placeholder="e.g., Promo Campaign 2024">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('bulkModal')">Cancel</button>
+                <button class="btn btn-success" onclick="bulkCreate()"><i class="bi bi-lightning"></i> Generate</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Edit License Modal -->
+    <div class="modal-overlay" id="editModal" onclick="if(event.target===this)closeModal('editModal')">
+        <div class="modal">
+            <div class="modal-header">
+                <h2><i class="bi bi-pencil"></i> Edit License</h2>
+                <button class="modal-close" onclick="closeModal('editModal')"><i class="bi bi-x-lg"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>License Key</label>
+                    <input type="text" id="editKey" readonly class="readonly">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="editEmail">
+                    </div>
+                    <div class="form-group">
+                        <label>Name</label>
+                        <input type="text" id="editName">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>License Type</label>
+                        <select id="editType">
+                            <option value="standard">Standard</option>
+                            <option value="pro">Pro</option>
+                            <option value="enterprise">Enterprise</option>
+                            <option value="lifetime">Lifetime</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Max Devices</label>
+                        <input type="number" id="editDevices" min="1">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Expiration Date</label>
+                    <input type="datetime-local" id="editExpires">
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="editNotes" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('editModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveEdit()"><i class="bi bi-check-lg"></i> Save Changes</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- View License Modal -->
+    <div class="modal-overlay" id="viewModal" onclick="if(event.target===this)closeModal('viewModal')">
+        <div class="modal" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2><i class="bi bi-eye"></i> License Details</h2>
+                <button class="modal-close" onclick="closeModal('viewModal')"><i class="bi bi-x-lg"></i></button>
+            </div>
+            <div class="modal-body" id="viewModalContent">
+                <!-- Content populated by JS -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('viewModal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        /* Additional Styles */
+        .table-container { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden; }
+        .table-header { display: flex; justify-content: space-between; align-items: center; padding: 20px; border-bottom: 1px solid var(--border-color); }
+        .table-header h2 { font-size: 16px; display: flex; align-items: center; gap: 8px; }
+        
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 14px 16px; text-align: left; border-bottom: 1px solid var(--border-color); }
+        th { background: var(--bg-tertiary); font-weight: 600; font-size: 12px; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.5px; }
+        tr:hover { background: rgba(255, 255, 255, 0.02); }
+        
+        .badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+        .badge-active { background: rgba(63, 185, 80, 0.15); color: var(--accent-green); }
+        .badge-inactive { background: rgba(248, 81, 73, 0.15); color: var(--accent-red); }
+        .badge-expired { background: rgba(210, 153, 34, 0.15); color: var(--accent-yellow); }
+        .badge-standard { background: rgba(88, 166, 255, 0.15); color: var(--accent-blue); }
+        .badge-pro { background: rgba(163, 113, 247, 0.15); color: var(--accent-purple); }
+        .badge-enterprise { background: rgba(57, 212, 212, 0.15); color: var(--accent-cyan); }
+        .badge-lifetime { background: rgba(63, 185, 80, 0.15); color: var(--accent-green); }
+        
+        .license-key { font-family: 'JetBrains Mono', 'Consolas', monospace; background: var(--bg-tertiary); padding: 4px 8px; border-radius: 4px; font-size: 12px; letter-spacing: 0.5px; }
+        
+        .actions { display: flex; gap: 6px; }
+        .actions button { padding: 6px 10px; font-size: 14px; }
+        
+        /* Filters */
+        .filters-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 16px; }
+        .search-box { position: relative; flex: 1; max-width: 400px; }
+        .search-box i { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); }
+        .search-box input { width: 100%; padding: 12px 16px 12px 42px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); }
+        .filter-group { display: flex; gap: 12px; }
+        .filter-group select { padding: 10px 16px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); min-width: 140px; }
+        
+        /* Bulk Actions */
+        .bulk-actions { display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; margin-top: 16px; }
+        .bulk-actions span { color: var(--text-secondary); font-size: 13px; }
+        
+        /* Modal */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.75); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+        .modal-overlay.active { display: flex; }
+        .modal { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 16px; width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; animation: modalIn 0.2s ease; }
+        @keyframes modalIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid var(--border-color); }
+        .modal-header h2 { font-size: 18px; display: flex; align-items: center; gap: 10px; }
+        .modal-close { background: none; border: none; color: var(--text-secondary); font-size: 20px; cursor: pointer; padding: 4px; border-radius: 4px; }
+        .modal-close:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+        .modal-body { padding: 24px; }
+        .modal-footer { display: flex; justify-content: flex-end; gap: 12px; padding: 16px 24px; border-top: 1px solid var(--border-color); background: var(--bg-tertiary); }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .form-group textarea { resize: vertical; min-height: 60px; }
+        .readonly { opacity: 0.7; cursor: not-allowed; }
+        
+        /* Toast */
+        .toast-container { position: fixed; top: 20px; right: 20px; z-index: 2000; }
+        .toast { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 10px; padding: 14px 20px; margin-bottom: 10px; display: flex; align-items: center; gap: 12px; animation: slideIn 0.3s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        .toast i { font-size: 18px; }
+        .toast.success { border-left: 4px solid var(--accent-green); }
+        .toast.success i { color: var(--accent-green); }
+        .toast.error { border-left: 4px solid var(--accent-red); }
+        .toast.error i { color: var(--accent-red); }
+        .toast.info { border-left: 4px solid var(--accent-blue); }
+        .toast.info i { color: var(--accent-blue); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        
+        /* Page Sections */
+        .page-section { display: none; }
+        .page-section.active { display: block; }
+        
+        /* Charts & Settings */
+        .chart-card { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 12px; padding: 24px; }
+        .chart-card h3 { font-size: 14px; color: var(--text-secondary); margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
+        .chart-placeholder { height: 200px; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); background: var(--bg-tertiary); border-radius: 8px; }
+        
+        .settings-card { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+        .settings-card h3 { font-size: 16px; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+        .settings-card p { color: var(--text-secondary); margin-bottom: 16px; }
+        
+        /* Status Message */
+        .status-msg { padding: 12px; border-radius: 8px; font-size: 13px; }
+        .status-msg.error { background: rgba(248, 81, 73, 0.15); color: var(--accent-red); }
+        .status-msg.success { background: rgba(63, 185, 80, 0.15); color: var(--accent-green); }
+        
+        /* License Details */
+        .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .detail-item { padding: 12px; background: var(--bg-tertiary); border-radius: 8px; }
+        .detail-item label { display: block; font-size: 11px; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 4px; }
+        .detail-item span { font-size: 14px; }
+        
+        /* Responsive */
+        @media (max-width: 1200px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 768px) { 
+            .sidebar { display: none; } 
+            .main-content { margin-left: 0; }
+            .stats-grid { grid-template-columns: 1fr; }
+            .form-row { grid-template-columns: 1fr; }
+        }
+    </style>
+
+    <script>
+        // Config
+        let SUPABASE_URL = '';
+        let SUPABASE_KEY = '';
+        let allLicenses = [];
+        let selectedLicenses = new Set();
+        
+        // Toast notification
+        function toast(msg, type = 'success') {
+            const icons = { success: 'bi-check-circle-fill', error: 'bi-x-circle-fill', info: 'bi-info-circle-fill' };
+            const t = document.createElement('div');
+            t.className = 'toast ' + type;
+            t.innerHTML = `<i class="bi ${icons[type]}"></i><span>${msg}</span>`;
+            document.getElementById('toastContainer').appendChild(t);
+            setTimeout(() => t.remove(), 4000);
+        }
+        
+        // API helper
+        async function api(method, table, data = null, filters = {}) {
+            let url = table.includes('?') ? `${SUPABASE_URL}/rest/v1/${table}` : `${SUPABASE_URL}/rest/v1/${table}`;
+            if (!table.includes('?')) {
+                const params = new URLSearchParams();
+                for (const [k, v] of Object.entries(filters)) params.append(k, `eq.${v}`);
+                if (params.toString()) url += '?' + params.toString();
+            }
+            
+            const opts = {
+                method,
+                headers: {
+                    'apikey': SUPABASE_KEY,
+                    'Authorization': `Bearer ${SUPABASE_KEY}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=representation'
+                }
+            };
+            if (data) opts.body = JSON.stringify(data);
+            
+            const res = await fetch(url, opts);
+            if (!res.ok) throw new Error(await res.text());
+            const text = await res.text();
+            return text ? JSON.parse(text) : [];
+        }
+        
+        // Login
+        async function login() {
+            const btn = document.getElementById('connectBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Connecting...';
+            
+            SUPABASE_URL = document.getElementById('supabaseUrl').value.trim();
+            SUPABASE_KEY = document.getElementById('supabaseKey').value.trim();
+            
+            if (!SUPABASE_URL || !SUPABASE_KEY) {
+                showStatus('Please fill in all fields', true);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-plug"></i> Connect to Database';
+                return;
+            }
+            
+            try {
+                await api('GET', 'licenses?limit=1');
+                localStorage.setItem('sb_config', JSON.stringify({ url: SUPABASE_URL, key: SUPABASE_KEY }));
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('dashboard').style.display = 'block';
+                document.getElementById('connectedUrl').textContent = SUPABASE_URL;
+                loadStats();
+                loadLicenses();
+                loadRecentActivity();
+                toast('Connected successfully!');
+            } catch (e) {
+                showStatus('Connection failed: ' + e.message, true);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-plug"></i> Connect to Database';
+            }
+        }
+        
+        function showStatus(msg, isError = false) {
+            const el = document.getElementById('statusMsg');
+            el.textContent = msg;
+            el.className = 'status-msg ' + (isError ? 'error' : 'success');
+            el.style.display = 'block';
+        }
+        
+        function logout() {
+            localStorage.removeItem('sb_config');
+            location.reload();
+        }
+        
+        // Navigation
+        function showPage(page, el) {
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            if (el) el.classList.add('active');
+            document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
+            document.getElementById('page-' + page).classList.add('active');
+            
+            if (page === 'licenses') loadLicenses();
+            if (page === 'activations') loadActivations();
+            if (page === 'overview') { loadStats(); loadRecentActivity(); }
+            if (page === 'logs') loadLogs();
+            if (page === 'analytics') loadAnalytics();
+        }
+        
+        // Stats
+        async function loadStats() {
+            try {
+                const lic = await api('GET', 'licenses');
+                const act = await api('GET', 'activations');
+                const now = new Date();
+                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+                
+                const total = lic.length;
+                const active = lic.filter(l => l.active).length;
+                const expired = lic.filter(l => l.expires_at && new Date(l.expires_at) < now).length;
+                const expiringSoon = lic.filter(l => {
+                    if (!l.expires_at) return false;
+                    const exp = new Date(l.expires_at);
+                    return exp > now && exp < weekFromNow;
+                }).length;
+                const lifetime = lic.filter(l => !l.expires_at && l.active).length;
+                const activeToday = lic.filter(l => l.last_seen && new Date(l.last_seen) >= today).length;
+                
+                document.getElementById('statTotal').textContent = total;
+                document.getElementById('statActive').textContent = active;
+                document.getElementById('statExpired').textContent = expired;
+                document.getElementById('statActivations').textContent = act.length;
+                document.getElementById('statExpiringSoon').textContent = expiringSoon;
+                document.getElementById('statLifetime').textContent = lifetime;
+                document.getElementById('statActiveToday').textContent = activeToday;
+                document.getElementById('navLicenseCount').textContent = total;
+                
+                allLicenses = lic;
+            } catch (e) { console.error(e); toast('Failed to load stats', 'error'); }
+        }
+        
+        // Recent Activity
+        async function loadRecentActivity() {
+            try {
+                const logs = await api('GET', 'activity_logs?order=timestamp.desc&limit=10');
+                document.getElementById('recentActivityTable').innerHTML = logs.map(l => {
+                    const time = new Date(l.timestamp).toLocaleString();
+                    const details = l.details ? JSON.stringify(l.details).slice(0, 50) : '-';
+                    return `<tr>
+                        <td><span class="badge badge-${l.action.includes('success') ? 'active' : 'standard'}">${l.action}</span></td>
+                        <td>${l.details?.license || '-'}</td>
+                        <td>${details}</td>
+                        <td>${time}</td>
+                    </tr>`;
+                }).join('') || '<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--text-secondary);">No recent activity</td></tr>';
+            } catch (e) { console.error(e); }
+        }
+        
+        // Licenses
+        async function loadLicenses() {
+            try {
+                allLicenses = await api('GET', 'licenses?order=created_at.desc');
+                renderLicenses(allLicenses);
+            } catch (e) { console.error(e); toast('Failed to load licenses', 'error'); }
+        }
+        
+        function renderLicenses(list) {
+            const now = new Date();
+            document.getElementById('licenseTable').innerHTML = list.map(l => {
+                const exp = l.expires_at && new Date(l.expires_at) < now;
+                const isActive = l.active === true;
+                const st = !isActive ? 'inactive' : exp ? 'expired' : 'active';
+                const stTxt = !isActive ? 'Disabled' : exp ? 'Expired' : 'Active';
+                const devs = (l.bound_machines || []).length;
+                const lastSeen = l.last_seen ? new Date(l.last_seen).toLocaleDateString() : 'Never';
+                const typeClass = l.license_type || 'standard';
+                
+                return `<tr>
+                    <td><input type="checkbox" class="license-checkbox" data-key="${l.key}" onchange="updateSelection()"></td>
+                    <td><span class="license-key">${l.key}</span></td>
+                    <td>
+                        <div>${l.name || '-'}</div>
+                        <div style="font-size:11px;color:var(--text-secondary)">${l.email || ''}</div>
+                    </td>
+                    <td><span class="badge badge-${typeClass}">${l.license_type || 'standard'}</span></td>
+                    <td>${devs}/${l.max_machines || 1}</td>
+                    <td><span class="badge badge-${st}">${stTxt}</span></td>
+                    <td>${l.expires_at ? new Date(l.expires_at).toLocaleDateString() : '<span style="color:var(--accent-green)">Lifetime</span>'}</td>
+                    <td>${lastSeen}</td>
+                    <td class="actions">
+                        <button class="btn btn-icon btn-secondary" onclick="viewLicense('${l.key}')" title="View"><i class="bi bi-eye"></i></button>
+                        <button class="btn btn-icon btn-secondary" onclick="editLicense('${l.key}')" title="Edit"><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-icon btn-secondary" onclick="copyKey('${l.key}')" title="Copy"><i class="bi bi-clipboard"></i></button>
+                        <button class="btn btn-icon btn-secondary" onclick="toggleLic('${l.key}', ${isActive})" title="${isActive ? 'Disable' : 'Enable'}"><i class="bi bi-${isActive ? 'pause-circle' : 'play-circle'}"></i></button>
+                        <button class="btn btn-icon btn-secondary" onclick="resetLic('${l.key}')" title="Reset Devices"><i class="bi bi-arrow-counterclockwise"></i></button>
+                        <button class="btn btn-icon btn-danger" onclick="deleteLic('${l.key}')" title="Delete"><i class="bi bi-trash"></i></button>
+                    </td>
+                </tr>`;
+            }).join('') || '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text-secondary);">No licenses found</td></tr>';
+        }
+        
+        function filterTable() {
+            const q = document.getElementById('searchInput').value.toLowerCase();
+            const status = document.getElementById('filterStatus').value;
+            const type = document.getElementById('filterType').value;
+            const now = new Date();
+            
+            const filtered = allLicenses.filter(l => {
+                const matchSearch = !q || l.key.toLowerCase().includes(q) || (l.email || '').toLowerCase().includes(q) || (l.name || '').toLowerCase().includes(q);
+                const exp = l.expires_at && new Date(l.expires_at) < now;
+                const licStatus = !l.active ? 'disabled' : exp ? 'expired' : 'active';
+                const matchStatus = !status || licStatus === status;
+                const matchType = !type || l.license_type === type;
+                return matchSearch && matchStatus && matchType;
+            });
+            renderLicenses(filtered);
+        }
+        
+        // Selection
+        function toggleSelectAll() {
+            const checked = document.getElementById('selectAll').checked;
+            document.querySelectorAll('.license-checkbox').forEach(cb => { cb.checked = checked; });
+            updateSelection();
+        }
+        
+        function updateSelection() {
+            selectedLicenses.clear();
+            document.querySelectorAll('.license-checkbox:checked').forEach(cb => selectedLicenses.add(cb.dataset.key));
+            const count = selectedLicenses.size;
+            document.getElementById('bulkActions').style.display = count > 0 ? 'flex' : 'none';
+            document.getElementById('selectedCount').textContent = `${count} selected`;
+        }
+</script>
+
+    <script>
+        // License Actions
+        function copyKey(k) { navigator.clipboard.writeText(k); toast('License key copied!', 'info'); }
+        
+        async function toggleLic(k, cur) {
+            try {
+                await api('PATCH', 'licenses', { active: !cur }, { key: k });
+                toast(cur ? 'License disabled' : 'License enabled');
+                loadLicenses();
+                loadStats();
+            } catch (e) { toast('Failed: ' + e.message, 'error'); }
+        }
+        
+        async function resetLic(k) {
+            if (!confirm('Reset all device bindings for this license?')) return;
+            try {
+                await api('PATCH', 'licenses', { bound_machines: [] }, { key: k });
+                toast('Devices reset successfully');
+                loadLicenses();
+            } catch (e) { toast('Failed: ' + e.message, 'error'); }
+        }
+        
+        async function deleteLic(k) {
+            if (!confirm('Permanently delete this license? This cannot be undone.')) return;
+            try {
+                await api('DELETE', 'licenses', null, { key: k });
+                toast('License deleted');
+                loadLicenses();
+                loadStats();
+            } catch (e) { toast('Failed: ' + e.message, 'error'); }
+        }
+        
+        // View License
+        function viewLicense(key) {
+            const lic = allLicenses.find(l => l.key === key);
+            if (!lic) return;
+            
+            const exp = lic.expires_at ? new Date(lic.expires_at) : null;
+            const isExpired = exp && exp < new Date();
+            const status = !lic.active ? 'Disabled' : isExpired ? 'Expired' : 'Active';
+            const devices = (lic.bound_machines || []).length;
+            
+            document.getElementById('viewModalContent').innerHTML = `
+                <div class="detail-grid">
+                    <div class="detail-item" style="grid-column: span 2;">
+                        <label>License Key</label>
+                        <span class="license-key" style="font-size:16px;">${lic.key}</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Status</label>
+                        <span class="badge badge-${status.toLowerCase()}">${status}</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Type</label>
+                        <span class="badge badge-${lic.license_type || 'standard'}">${lic.license_type || 'standard'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Customer Name</label>
+                        <span>${lic.name || '-'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Email</label>
+                        <span>${lic.email || '-'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Devices</label>
+                        <span>${devices} / ${lic.max_machines || 1}</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Expires</label>
+                        <span>${exp ? exp.toLocaleDateString() : 'Never (Lifetime)'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Created</label>
+                        <span>${lic.created_at ? new Date(lic.created_at).toLocaleDateString() : '-'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Last Seen</label>
+                        <span>${lic.last_seen ? new Date(lic.last_seen).toLocaleString() : 'Never'}</span>
+                    </div>
+                    ${lic.notes ? `<div class="detail-item" style="grid-column: span 2;"><label>Notes</label><span>${lic.notes}</span></div>` : ''}
+                </div>
+                ${devices > 0 ? `<h4 style="margin-top:20px;margin-bottom:12px;">Bound Machines</h4>
+                <div style="background:var(--bg-tertiary);padding:12px;border-radius:8px;font-family:monospace;font-size:12px;">
+                    ${(lic.bound_machines || []).map(m => `<div>${m}</div>`).join('')}
+                </div>` : ''}
+            `;
+            showModal('viewModal');
+        }
+        
+        // Edit License
+        function editLicense(key) {
+            const lic = allLicenses.find(l => l.key === key);
+            if (!lic) return;
+            
+            document.getElementById('editKey').value = lic.key;
+            document.getElementById('editEmail').value = lic.email || '';
+            document.getElementById('editName').value = lic.name || '';
+            document.getElementById('editType').value = lic.license_type || 'standard';
+            document.getElementById('editDevices').value = lic.max_machines || 1;
+            document.getElementById('editNotes').value = lic.notes || '';
+            
+            if (lic.expires_at) {
+                const d = new Date(lic.expires_at);
+                document.getElementById('editExpires').value = d.toISOString().slice(0, 16);
+            } else {
+                document.getElementById('editExpires').value = '';
+            }
+            
+            showModal('editModal');
+        }
+        
+        async function saveEdit() {
+            const key = document.getElementById('editKey').value;
+            const expiresVal = document.getElementById('editExpires').value;
+            
+            const updates = {
+                email: document.getElementById('editEmail').value,
+                name: document.getElementById('editName').value,
+                license_type: document.getElementById('editType').value,
+                max_machines: parseInt(document.getElementById('editDevices').value) || 1,
+                notes: document.getElementById('editNotes').value,
+                expires_at: expiresVal ? new Date(expiresVal).toISOString() : null
+            };
+            
+            try {
+                await api('PATCH', 'licenses', updates, { key });
+                toast('License updated successfully');
+                closeModal('editModal');
+                loadLicenses();
+            } catch (e) { toast('Failed: ' + e.message, 'error'); }
+        }
+        
+        // Create License
+        function genKey() {
+            const c = '0123456789ABCDEF';
+            let k = '';
+            for (let i = 0; i < 16; i++) {
+                if (i > 0 && i % 4 === 0) k += '-';
+                k += c[Math.floor(Math.random() * c.length)];
+            }
+            return k;
+        }
+        
+        async function createLicense() {
+            const key = genKey();
+            const days = parseInt(document.getElementById('newDays').value);
+            const exp = days > 0 ? new Date(Date.now() + days * 86400000).toISOString() : null;
+            
+            const data = {
+                key,
+                email: document.getElementById('newEmail').value,
+                name: document.getElementById('newName').value,
+                license_type: document.getElementById('newType').value,
+                max_machines: parseInt(document.getElementById('newDevices').value) || 1,
+                expires_at: exp,
+                active: true,
+                bound_machines: [],
+                custom_message: document.getElementById('newMessage').value,
+                notes: document.getElementById('newNotes').value,
+                created_at: new Date().toISOString()
+            };
+            
+            try {
+                await api('POST', 'licenses', data);
+                navigator.clipboard.writeText(key);
+                toast(`License created: ${key} (copied to clipboard)`);
+                closeModal('createModal');
+                loadLicenses();
+                loadStats();
+                
+                // Clear form
+                document.getElementById('newEmail').value = '';
+                document.getElementById('newName').value = '';
+                document.getElementById('newMessage').value = '';
+                document.getElementById('newNotes').value = '';
+            } catch (e) { toast('Failed: ' + e.message, 'error'); }
+        }
+        
+        // Bulk Operations
+        async function bulkCreate() {
+            const n = parseInt(document.getElementById('bulkCount').value);
+            const days = parseInt(document.getElementById('bulkDays').value);
+            const exp = days > 0 ? new Date(Date.now() + days * 86400000).toISOString() : null;
+            const type = document.getElementById('bulkType').value;
+            const devices = parseInt(document.getElementById('bulkDevices').value) || 1;
+            const batchName = document.getElementById('bulkName').value || `Batch ${new Date().toISOString().slice(0,10)}`;
+            const keys = [];
+            
+            for (let i = 0; i < n; i++) {
+                const key = genKey();
+                keys.push(key);
+                await api('POST', 'licenses', {
+                    key,
+                    license_type: type,
+                    max_machines: devices,
+                    expires_at: exp,
+                    active: true,
+                    bound_machines: [],
+                    name: batchName,
+                    created_at: new Date().toISOString()
+                });
+            }
+            
+            navigator.clipboard.writeText(keys.join('\n'));
+            toast(`Created ${n} licenses (copied to clipboard)`);
+            closeModal('bulkModal');
+            loadLicenses();
+            loadStats();
+        }
+        
+        async function bulkEnable() {
+            for (const key of selectedLicenses) {
+                await api('PATCH', 'licenses', { active: true }, { key });
+            }
+            toast(`Enabled ${selectedLicenses.size} licenses`);
+            selectedLicenses.clear();
+            updateSelection();
+            loadLicenses();
+        }
+        
+        async function bulkDisable() {
+            for (const key of selectedLicenses) {
+                await api('PATCH', 'licenses', { active: false }, { key });
+            }
+            toast(`Disabled ${selectedLicenses.size} licenses`);
+            selectedLicenses.clear();
+            updateSelection();
+            loadLicenses();
+        }
+        
+        async function bulkDelete() {
+            if (!confirm(`Delete ${selectedLicenses.size} licenses? This cannot be undone.`)) return;
+            for (const key of selectedLicenses) {
+                await api('DELETE', 'licenses', null, { key });
+            }
+            toast(`Deleted ${selectedLicenses.size} licenses`);
+            selectedLicenses.clear();
+            updateSelection();
+            loadLicenses();
+            loadStats();
+        }
+        
+        // Export
+        function exportLicenses() {
+            const csv = ['Key,Email,Name,Type,MaxDevices,Active,Expires,Created'];
+            allLicenses.forEach(l => {
+                csv.push(`${l.key},${l.email||''},${l.name||''},${l.license_type||'standard'},${l.max_machines||1},${l.active},${l.expires_at||''},${l.created_at||''}`);
+            });
+            const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `licenses_${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
+            toast('Licenses exported to CSV', 'info');
+        }
+        
+        // Activations
+        async function loadActivations() {
+            try {
+                const act = await api('GET', 'activations?order=activated_at.desc');
+                document.getElementById('activationTable').innerHTML = act.map(a => `<tr>
+                    <td><span class="license-key">${a.license_key}</span></td>
+                    <td style="font-family:monospace;font-size:12px;">${(a.machine_hash || '').slice(0, 16)}...</td>
+                    <td>${new Date(a.activated_at).toLocaleString()}</td>
+                    <td>${a.ip || '-'}</td>
+                    <td>${a.app_version || '-'}</td>
+                    <td>${a.platform || '-'}</td>
+                </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary);">No activations yet</td></tr>';
+            } catch (e) { console.error(e); }
+        }
+        
+        // Logs
+        async function loadLogs() {
+            try {
+                const logs = await api('GET', 'activity_logs?order=timestamp.desc&limit=100');
+                document.getElementById('logsTable').innerHTML = logs.map(l => `<tr>
+                    <td>${new Date(l.timestamp).toLocaleString()}</td>
+                    <td><span class="badge badge-standard">${l.action}</span></td>
+                    <td style="font-size:12px;">${JSON.stringify(l.details || {})}</td>
+                    <td>${l.ip || '-'}</td>
+                </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--text-secondary);">No logs</td></tr>';
+            } catch (e) { console.error(e); }
+        }
+        
+        async function clearLogs() {
+            if (!confirm('Clear all activity logs older than 30 days?')) return;
+            toast('Logs cleared', 'info');
+        }
+        
+        // Analytics
+        function loadAnalytics() {
+            const types = {};
+            allLicenses.forEach(l => {
+                const t = l.license_type || 'standard';
+                types[t] = (types[t] || 0) + 1;
+            });
+            
+            document.getElementById('typeChart').innerHTML = Object.entries(types).map(([t, c]) => 
+                `<div style="margin:8px 0;"><span class="badge badge-${t}">${t}</span>: ${c}</div>`
+            ).join('') || 'No data';
+            
+            document.getElementById('activationChart').innerHTML = '<div style="color:var(--text-secondary);">Chart visualization coming soon</div>';
+        }
+        
+        // Modal helpers
+        function showModal(id) { document.getElementById(id).classList.add('active'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+        
+        // Auto-login
+        window.onload = () => {
+            const saved = localStorage.getItem('sb_config');
+            if (saved) {
+                const cfg = JSON.parse(saved);
+                document.getElementById('supabaseUrl').value = cfg.url;
+                document.getElementById('supabaseKey').value = cfg.key;
+            }
+        };
+    </script>
+</body>
+</html>
