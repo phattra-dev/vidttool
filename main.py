@@ -14,19 +14,38 @@ init(autoreset=True)
 
 # Import Facebook helper for profile extraction
 try:
-    from facebook_helper import get_facebook_profile_videos
+    from facebook_helper import get_facebook_profile_videos, try_direct_facebook_download
     FACEBOOK_HELPER_AVAILABLE = True
 except ImportError:
     FACEBOOK_HELPER_AVAILABLE = False
+    try_direct_facebook_download = None
+
+# Import Image downloader
+try:
+    from image_downloader import ImageDownloader
+    IMAGE_DOWNLOADER_AVAILABLE = True
+except ImportError:
+    IMAGE_DOWNLOADER_AVAILABLE = False
+    ImageDownloader = None
+
+# Import License client
+try:
+    from license_client import get_license_client, LicenseClient
+    LICENSE_CLIENT_AVAILABLE = True
+except ImportError:
+    LICENSE_CLIENT_AVAILABLE = False
+    get_license_client = None
+    LicenseClient = None
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QPushButton, QTextEdit, QComboBox, QCheckBox, QLabel,
     QProgressBar, QFileDialog, QMessageBox, QFrame, QGridLayout, QSizePolicy,
-    QTabWidget, QDialog, QScrollArea, QListWidget, QListWidgetItem
+    QTabWidget, QDialog, QScrollArea, QListWidget, QListWidgetItem, QSpinBox,
+    QProgressDialog, QDoubleSpinBox, QGroupBox, QColorDialog
 )
-from PyQt6.QtCore import QThread, pyqtSignal, Qt, QSettings, QTimer
-from PyQt6.QtGui import QFont, QIcon, QPixmap
+from PyQt6.QtCore import QThread, pyqtSignal, Qt, QSettings, QTimer, QUrl
+from PyQt6.QtGui import QFont, QIcon, QPixmap, QDesktopServices, QColor
 
 
 class URLListWidget(QWidget):
@@ -110,7 +129,8 @@ class URLListWidget(QWidget):
         
         for line in lines:
             url = line.strip()
-            if url and url.startswith(('http://', 'https://')):
+            # Accept http/https URLs and data: URLs (base64 images)
+            if url and (url.startswith(('http://', 'https://')) or url.startswith('data:image/')):
                 if url not in [u['url'] for u in self.urls]:  # Avoid duplicates
                     # Check for problematic URLs
                     if ('facebook.com/people/' in url and 'pfbid' in url) or 'facebook.com/share/' in url:
@@ -125,7 +145,7 @@ class URLListWidget(QWidget):
         # Log duplicates if any
         if duplicate_urls and self.parent_window:
             for dup_url in duplicate_urls:
-                self.parent_window.multi_log(f"🔄 Skipped duplicate: {dup_url[:50]}...")
+                self.parent_window.multi_log(f"[SKIP] Skipped duplicate: {dup_url[:50]}...")
         
         if new_urls:
             self.placeholder_label.hide()
@@ -201,7 +221,7 @@ class URLListWidget(QWidget):
         # URL label (truncated)
         url_display = url[:80] + "..." if len(url) > 80 else url
         if is_problematic:
-            url_display = "⚠ " + url_display
+            url_display = "[!] " + url_display
         
         url_label = QLabel(url_display)
         url_label.setStyleSheet(f"""
@@ -215,12 +235,12 @@ class URLListWidget(QWidget):
         
         # Set tooltip with warning for problematic URLs
         if is_problematic:
-            url_label.setToolTip(f"⚠ Problematic URL: {url}\n\nThis URL type may not work. Consider using direct video URLs instead.")
+            url_label.setToolTip(f"[!] Problematic URL: {url}\n\nThis URL type may not work. Consider using direct video URLs instead.")
         else:
             url_label.setToolTip(url)  # Full URL on hover
         
         # Remove button
-        remove_btn = QPushButton("✕")
+        remove_btn = QPushButton("X")
         remove_btn.setFixedSize(20, 20)
         remove_btn.setStyleSheet("""
             QPushButton {
@@ -325,7 +345,7 @@ class MultipleVideoInfoDialog(QDialog):
         # Title with icon
         title_layout = QHBoxLayout()
         
-        info_icon = QLabel("📋")
+        info_icon = QLabel("[i]")
         info_icon.setStyleSheet("font-size: 24px; border: none; background: transparent;")
         
         title_label = QLabel(f"Information for {len(self.video_data_list)} Videos")
@@ -377,7 +397,7 @@ class MultipleVideoInfoDialog(QDialog):
         # Buttons
         button_layout = QHBoxLayout()
         
-        copy_all_btn = QPushButton("📋 Copy All Info")
+        copy_all_btn = QPushButton("Copy All Info")
         copy_all_btn.clicked.connect(self.copy_all_info)
         self.style_button_secondary(copy_all_btn)
         
@@ -412,11 +432,11 @@ class MultipleVideoInfoDialog(QDialog):
         header_layout = QHBoxLayout()
         
         if video_data.get('error'):
-            status_icon = "❌"
+            status_icon = "[X]"
             status_color = "#f85149"
             video_title = f"Video {index} - Error"
         else:
-            status_icon = "✅"
+            status_icon = "[OK]"
             status_color = "#2ea043"
             video_title = f"Video {index} - {video_data.get('title', 'Unknown')[:40]}..."
         
@@ -515,8 +535,8 @@ class MultipleVideoInfoDialog(QDialog):
         QApplication.clipboard().setText(info_text)
         
         # Show brief confirmation
-        self.sender().setText("✅ Copied!")
-        QTimer.singleShot(1500, lambda: self.sender().setText("📋 Copy All Info"))
+        self.sender().setText("Copied!")
+        QTimer.singleShot(1500, lambda: self.sender().setText("Copy All Info"))
     
     def style_button_primary(self, btn):
         btn.setStyleSheet("""
@@ -524,7 +544,7 @@ class MultipleVideoInfoDialog(QDialog):
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #6366f1, stop:1 #4f46e5);
                 color: white;
                 border: none;
-                border-radius: 10px;
+                border-radius: 0px;
                 font-size: 13px;
                 font-weight: bold;
                 padding: 10px 20px;
@@ -544,7 +564,7 @@ class MultipleVideoInfoDialog(QDialog):
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #374151, stop:1 #1f2937);
                 color: #e5e7eb;
                 border: 1px solid #4b5563;
-                border-radius: 10px;
+                border-radius: 0px;
                 font-size: 12px;
                 font-weight: 600;
                 padding: 10px 20px;
@@ -596,7 +616,7 @@ class MultipleProgressDialog(QDialog):
         # Title with icon
         title_layout = QHBoxLayout()
         
-        title_icon = QLabel("📥")
+        title_icon = QLabel("[v]")
         title_icon.setStyleSheet("font-size: 20px; border: none; background: transparent;")
         
         title_label = QLabel(f"Downloading {self.total_videos} Videos")
@@ -642,7 +662,7 @@ class MultipleProgressDialog(QDialog):
         button_layout = QHBoxLayout()
         button_layout.addStretch()
         
-        self.pause_btn = QPushButton("⏸ Pause")
+        self.pause_btn = QPushButton("Pause")
         self.pause_btn.clicked.connect(self.toggle_pause)
         self.pause_btn.setStyleSheet("""
             QPushButton {
@@ -660,7 +680,7 @@ class MultipleProgressDialog(QDialog):
             }
         """)
         
-        self.cancel_btn = QPushButton("⏹ Stop")
+        self.cancel_btn = QPushButton("Stop")
         self.cancel_btn.clicked.connect(self.cancel_operation)
         self.cancel_btn.setStyleSheet("""
             QPushButton {
@@ -725,10 +745,10 @@ class MultipleProgressDialog(QDialog):
         """Toggle pause/resume"""
         self.paused = not self.paused
         if self.paused:
-            self.pause_btn.setText("▶ Resume")
+            self.pause_btn.setText("Resume")
             self.video_status_label.setText("Downloads paused...")
         else:
-            self.pause_btn.setText("⏸ Pause")
+            self.pause_btn.setText("Pause")
     
     def cancel_operation(self):
         """Handle cancel button click"""
@@ -749,7 +769,7 @@ class ProgressDialog(QDialog):
     
     def setup_dialog(self, title):
         self.setWindowTitle(title)
-        self.setFixedSize(400, 150)
+        self.setFixedSize(400, 180)
         self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.WindowCloseButtonHint)
         
         # Apply dark theme styling
@@ -769,21 +789,21 @@ class ProgressDialog(QDialog):
         """)
         
         layout = QVBoxLayout(self)
-        layout.setSpacing(20)
-        layout.setContentsMargins(25, 25, 25, 25)
+        layout.setSpacing(12)
+        layout.setContentsMargins(20, 20, 20, 20)
         
         # Title with icon
         title_layout = QHBoxLayout()
         
         if self.operation_type == "info":
-            icon = "ℹ️"
+            icon = "[i]"
             title_text = "Getting Video Information"
         else:
-            icon = "⬇️"
+            icon = "[v]"
             title_text = "Downloading Video"
         
         title_icon = QLabel(icon)
-        title_icon.setStyleSheet("font-size: 20px; border: none; background: transparent;")
+        title_icon.setStyleSheet("font-size: 18px; border: none; background: transparent;")
         
         title_label = QLabel(title_text)
         title_label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
@@ -829,6 +849,7 @@ class ProgressDialog(QDialog):
         
         self.cancel_btn = QPushButton("Cancel")
         self.cancel_btn.clicked.connect(self.cancel_operation)
+        self.cancel_btn.setFixedHeight(28)
         self.cancel_btn.setStyleSheet("""
             QPushButton {
                 background: rgba(248, 81, 73, 0.8);
@@ -838,7 +859,7 @@ class ProgressDialog(QDialog):
                 font-size: 11px;
                 font-weight: bold;
                 padding: 6px 16px;
-                min-width: 60px;
+                min-width: 70px;
             }
             QPushButton:hover {
                 background: rgba(248, 81, 73, 1.0);
@@ -912,7 +933,7 @@ class VideoInfoDialog(QDialog):
         # Title with icon
         title_layout = QHBoxLayout()
         
-        info_icon = QLabel("ℹ️")
+        info_icon = QLabel("[i]")
         info_icon.setStyleSheet("font-size: 24px; border: none; background: transparent;")
         
         title_label = QLabel("Video Information")
@@ -957,11 +978,11 @@ class VideoInfoDialog(QDialog):
         
         # Create info labels
         info_items = [
-            ("📺 Title:", self.video_data.get('title', 'Unknown')),
-            ("👤 Uploader:", self.video_data.get('uploader', 'Unknown')),
-            ("🌐 Platform:", self.video_data.get('platform', 'Unknown')),
-            ("⏱️ Duration:", dur_str),
-            ("👁️ Views:", views_str)
+            ("Title:", self.video_data.get('title', 'Unknown')),
+            ("Uploader:", self.video_data.get('uploader', 'Unknown')),
+            ("Platform:", self.video_data.get('platform', 'Unknown')),
+            ("Duration:", dur_str),
+            ("Views:", views_str)
         ]
         
         for label, value in info_items:
@@ -988,7 +1009,7 @@ class VideoInfoDialog(QDialog):
         # Buttons
         button_layout = QHBoxLayout()
         
-        copy_btn = QPushButton("📋 Copy Info")
+        copy_btn = QPushButton("Copy Info")
         copy_btn.clicked.connect(self.copy_info)
         self.style_button_secondary(copy_btn)
         
@@ -1026,8 +1047,8 @@ Views: {views_str}"""
         QApplication.clipboard().setText(info_text)
         
         # Show brief confirmation
-        self.sender().setText("✅ Copied!")
-        QTimer.singleShot(1500, lambda: self.sender().setText("📋 Copy Info"))
+        self.sender().setText("Copied!")
+        QTimer.singleShot(1500, lambda: self.sender().setText("Copy Info"))
     
     def style_button_primary(self, btn):
         btn.setStyleSheet("""
@@ -1035,7 +1056,7 @@ Views: {views_str}"""
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #6366f1, stop:1 #4f46e5);
                 color: white;
                 border: none;
-                border-radius: 10px;
+                border-radius: 0px;
                 font-size: 13px;
                 font-weight: bold;
                 padding: 10px 20px;
@@ -1055,7 +1076,7 @@ Views: {views_str}"""
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #374151, stop:1 #1f2937);
                 color: #e5e7eb;
                 border: 1px solid #4b5563;
-                border-radius: 10px;
+                border-radius: 0px;
                 font-size: 12px;
                 font-weight: 600;
                 padding: 10px 20px;
@@ -1106,7 +1127,7 @@ class SuccessDialog(QDialog):
         # Success icon and title
         title_layout = QHBoxLayout()
         
-        success_icon = QLabel("✅")
+        success_icon = QLabel("[OK]")
         success_icon.setStyleSheet("font-size: 24px; border: none; background: transparent;")
         
         title_label = QLabel("Download Successful!")
@@ -1134,7 +1155,7 @@ class SuccessDialog(QDialog):
         close_btn.clicked.connect(self.reject)
         self.style_button_secondary(close_btn)
         
-        view_btn = QPushButton("📁 View Video")
+        view_btn = QPushButton("View Video")
         view_btn.clicked.connect(self.view_video)
         self.style_button_primary(view_btn)
         
@@ -1151,7 +1172,7 @@ class SuccessDialog(QDialog):
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #238636, stop:1 #2ea043);
                 color: white;
                 border: none;
-                border-radius: 8px;
+                border-radius: 0px;
                 font-size: 13px;
                 font-weight: bold;
                 padding: 8px 16px;
@@ -1171,7 +1192,7 @@ class SuccessDialog(QDialog):
                 background: rgba(33, 38, 45, 0.8);
                 color: #f0f6fc;
                 border: 2px solid #30363d;
-                border-radius: 8px;
+                border-radius: 0px;
                 font-size: 12px;
                 font-weight: bold;
                 padding: 8px 16px;
@@ -1249,7 +1270,7 @@ class ProfileInfoDialog(QDialog):
         layout.setContentsMargins(20, 20, 20, 20)
         
         # Header
-        header = QLabel("✅ Profile Found")
+        header = QLabel("[OK] Profile Found")
         header.setStyleSheet("color: #3fb950; font-size: 18px; font-weight: bold;")
         header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(header)
@@ -1272,9 +1293,9 @@ class ProfileInfoDialog(QDialog):
         total_videos = self.profile_data.get('total_found', 0)
         
         # Simple info rows
-        info_layout.addWidget(self.create_info_row("👤 Profile", profile_name))
-        info_layout.addWidget(self.create_info_row("📱 Platform", platform))
-        info_layout.addWidget(self.create_info_row("📹 Videos", str(total_videos)))
+        info_layout.addWidget(self.create_info_row("Profile", profile_name))
+        info_layout.addWidget(self.create_info_row("Platform", platform))
+        info_layout.addWidget(self.create_info_row("Videos", str(total_videos)))
         
         layout.addWidget(info_frame)
         
@@ -1376,7 +1397,7 @@ class ProfileDownloadDialog(QDialog):
         # Header with profile info
         header_layout = QHBoxLayout()
         
-        profile_icon = QLabel("👤")
+        profile_icon = QLabel("[P]")
         profile_icon.setStyleSheet("font-size: 24px; border: none; background: transparent;")
         
         profile_info_layout = QVBoxLayout()
@@ -1534,7 +1555,7 @@ class ProfileDownloadDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
         self.style_button_secondary(cancel_btn)
         
-        download_btn = QPushButton("📥 Start Download")
+        download_btn = QPushButton("Start Download")
         download_btn.clicked.connect(self.accept)
         self.style_button_primary(download_btn)
         
@@ -1611,7 +1632,7 @@ class ProfileDownloadDialog(QDialog):
         duration = video.get('duration', 0)
         duration_str = f"{int(duration)//60}:{int(duration)%60:02d}" if duration else "Unknown"
         
-        details_label = QLabel(f"Duration: {duration_str} • Uploader: {video.get('uploader', 'Unknown')}")
+        details_label = QLabel(f"Duration: {duration_str} - Uploader: {video.get('uploader', 'Unknown')}")
         details_label.setStyleSheet("color: #7d8590; font-size: 9px;")
         
         info_layout.addWidget(title_label)
@@ -1649,7 +1670,7 @@ class ProfileDownloadDialog(QDialog):
                     stop:0 #238636, stop:1 #2ea043);
                 color: white;
                 border: none;
-                border-radius: 8px;
+                border-radius: 0px;
                 font-size: 12px;
                 font-weight: bold;
                 padding: 8px 16px;
@@ -1667,7 +1688,7 @@ class ProfileDownloadDialog(QDialog):
                 background: rgba(33, 38, 45, 0.8);
                 color: #f0f6fc;
                 border: 2px solid #30363d;
-                border-radius: 8px;
+                border-radius: 0px;
                 font-size: 12px;
                 font-weight: bold;
                 padding: 8px 16px;
@@ -1719,7 +1740,7 @@ class BatchCompleteDialog(QDialog):
         header_layout.setSpacing(12)
         
         # Success icon - smaller
-        icon_label = QLabel("🎉")
+        icon_label = QLabel("[*]")
         icon_label.setStyleSheet("""
             QLabel {
                 font-size: 24px;
@@ -1787,7 +1808,7 @@ class BatchCompleteDialog(QDialog):
         stats_layout.setSpacing(15)
         
         # Success card
-        success_card = self.create_stat_card("✅", str(completed), "Successful", "#2ea043")
+        success_card = self.create_stat_card("[OK]", str(completed), "Successful", "#2ea043")
         stats_layout.addWidget(success_card)
         
         # Divider
@@ -1797,7 +1818,7 @@ class BatchCompleteDialog(QDialog):
         stats_layout.addWidget(divider)
         
         # Failed card
-        failed_card = self.create_stat_card("❌", str(failed), "Failed", "#f85149")
+        failed_card = self.create_stat_card("[X]", str(failed), "Failed", "#f85149")
         stats_layout.addWidget(failed_card)
         
         layout.addWidget(stats_frame)
@@ -1817,7 +1838,7 @@ class BatchCompleteDialog(QDialog):
             location_layout = QVBoxLayout(location_frame)
             location_layout.setSpacing(4)
             
-            location_title = QLabel("📁 Download Location")
+            location_title = QLabel("Download Location")
             location_title.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
             location_title.setStyleSheet("color: #58a6ff; font-size: 10px; font-weight: bold;")
             
@@ -1853,7 +1874,7 @@ class BatchCompleteDialog(QDialog):
         self.style_button_secondary(close_btn)
         
         # Open folder button
-        open_folder_btn = QPushButton("📁 Open Folder")
+        open_folder_btn = QPushButton("Open Folder")
         open_folder_btn.clicked.connect(self.open_folder)
         self.style_button_primary(open_folder_btn)
         
@@ -1928,7 +1949,7 @@ class BatchCompleteDialog(QDialog):
                     stop:0 #238636, stop:1 #2ea043);
                 color: white;
                 border: none;
-                border-radius: 8px;
+                border-radius: 0px;
                 font-size: 12px;
                 font-weight: bold;
                 padding: 8px 16px;
@@ -1950,7 +1971,7 @@ class BatchCompleteDialog(QDialog):
                 background: rgba(33, 38, 45, 0.8);
                 color: #f0f6fc;
                 border: 2px solid #30363d;
-                border-radius: 8px;
+                border-radius: 0px;
                 font-size: 12px;
                 font-weight: bold;
                 padding: 8px 16px;
@@ -1965,6 +1986,1350 @@ class BatchCompleteDialog(QDialog):
                 background: rgba(88, 166, 255, 0.1);
             }
         """)
+
+
+class ImageDownloadProgressDialog(QDialog):
+    """Modern progress dialog for image downloads"""
+    def __init__(self, parent, total_images):
+        super().__init__(parent)
+        self.total_images = total_images
+        self.cancelled = False
+        self.setup_dialog()
+    
+    def setup_dialog(self):
+        self.setWindowTitle("Downloading Images")
+        self.setFixedSize(450, 200)
+        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.WindowCloseButtonHint)
+        
+        # Apply dark theme styling
+        self.setStyleSheet("""
+            QDialog {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 #1a1d23, stop:1 #161b22);
+                color: #f0f6fc;
+                border: 2px solid #30363d;
+                border-radius: 12px;
+            }
+            QLabel {
+                color: #f0f6fc;
+                font-size: 12px;
+                border: none;
+                background: transparent;
+            }
+        """)
+        
+        layout = QVBoxLayout(self)
+        layout.setSpacing(15)
+        layout.setContentsMargins(25, 25, 25, 25)
+        
+        # Header with icon
+        header_layout = QHBoxLayout()
+        
+        icon_label = QLabel("[IMG]")
+        icon_label.setStyleSheet("font-size: 24px; border: none; background: transparent;")
+        
+        title_label = QLabel("Downloading Images")
+        title_label.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        title_label.setStyleSheet("color: #58a6ff; font-size: 13px; font-weight: bold;")
+        
+        header_layout.addWidget(icon_label)
+        header_layout.addWidget(title_label)
+        header_layout.addStretch()
+        
+        layout.addLayout(header_layout)
+        
+        # Status message
+        self.status_label = QLabel(f"Preparing to download {self.total_images} images...")
+        self.status_label.setStyleSheet("color: #f0f6fc; font-size: 11px;")
+        self.status_label.setWordWrap(True)
+        layout.addWidget(self.status_label)
+        
+        # Current URL label
+        self.url_label = QLabel("")
+        self.url_label.setStyleSheet("""
+            color: #7d8590; 
+            font-size: 10px; 
+            font-family: 'Consolas', monospace;
+            background: rgba(33, 38, 45, 0.5);
+            padding: 4px 8px;
+            border-radius: 4px;
+        """)
+        self.url_label.setWordWrap(True)
+        layout.addWidget(self.url_label)
+        
+        # Progress bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, self.total_images)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFixedHeight(22)
+        self.progress_bar.setTextVisible(True)
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                background: #21262d;
+                border: 1px solid #30363d;
+                border-radius: 11px;
+                text-align: center;
+                font-size: 11px;
+                font-weight: bold;
+                color: #f0f6fc;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #238636, stop:1 #2ea043);
+                border-radius: 10px;
+            }
+        """)
+        layout.addWidget(self.progress_bar)
+        
+        # Stats row
+        self.stats_label = QLabel("0 saved | 0 failed")
+        self.stats_label.setStyleSheet("color: #7d8590; font-size: 10px;")
+        self.stats_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.stats_label)
+        
+        # Cancel button
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        
+        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.clicked.connect(self.cancel_download)
+        self.cancel_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(248, 81, 73, 0.8);
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-size: 11px;
+                font-weight: bold;
+                padding: 6px 20px;
+                min-width: 80px;
+            }
+            QPushButton:hover {
+                background: rgba(248, 81, 73, 1.0);
+            }
+            QPushButton:pressed {
+                background: rgba(220, 53, 69, 1.0);
+            }
+        """)
+        
+        button_layout.addWidget(self.cancel_btn)
+        layout.addLayout(button_layout)
+    
+    def update_progress(self, current, url, successful, failed):
+        """Update progress display"""
+        self.progress_bar.setValue(current)
+        self.progress_bar.setFormat(f"{current}/{self.total_images}")
+        self.status_label.setText(f"Downloading image {current} of {self.total_images}...")
+        self.url_label.setText(url[:70] + "..." if len(url) > 70 else url)
+        self.stats_label.setText(f"[OK] {successful} saved | [X] {failed} failed")
+        QApplication.processEvents()
+    
+    def cancel_download(self):
+        """Handle cancel button click"""
+        self.cancelled = True
+        self.cancel_btn.setEnabled(False)
+        self.cancel_btn.setText("Stopping...")
+        self.status_label.setText("Stopping download...")
+    
+    def closeEvent(self, event):
+        """Handle dialog close event"""
+        self.cancelled = True
+        event.accept()
+
+
+class ImageDownloadCompleteDialog(QDialog):
+    """Modern completion dialog for image downloads"""
+    def __init__(self, parent, successful, failed, skipped, output_dir, was_cancelled=False):
+        super().__init__(parent)
+        self.successful = successful
+        self.failed = failed
+        self.skipped = skipped
+        self.output_dir = output_dir
+        self.was_cancelled = was_cancelled
+        self.setup_dialog()
+    
+    def setup_dialog(self):
+        # Determine title based on results, not just cancelled flag
+        if self.was_cancelled and self.successful == 0:
+            title = "Download Cancelled"
+            icon = "[!]"
+            title_text = "Download Cancelled"
+            title_color = "#f0883e"
+        elif self.successful > 0:
+            title = "Download Complete"
+            icon = "[OK]"
+            title_text = f"Downloaded {self.successful} image{'s' if self.successful != 1 else ''}"
+            title_color = "#2ea043"
+        elif self.failed > 0:
+            title = "Download Failed"
+            icon = "[X]"
+            title_text = "Download Failed"
+            title_color = "#f85149"
+        else:
+            title = "Download Complete"
+            icon = "[OK]"
+            title_text = "Download Complete"
+            title_color = "#2ea043"
+        
+        self.setWindowTitle(title)
+        self.setFixedSize(420, 240)
+        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.WindowCloseButtonHint)
+        
+        # Apply dark theme styling
+        self.setStyleSheet("""
+            QDialog {
+                background: #161b22;
+                color: #f0f6fc;
+                border: 2px solid #30363d;
+                border-radius: 12px;
+            }
+            QLabel {
+                color: #f0f6fc;
+                border: none;
+                background: transparent;
+            }
+        """)
+        
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        # Header with icon
+        header_layout = QHBoxLayout()
+        
+        icon_label = QLabel(icon)
+        icon_label.setStyleSheet("font-size: 24px;")
+        
+        title_label = QLabel(title_text)
+        title_label.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        title_label.setStyleSheet(f"color: {title_color}; font-size: 13px;")
+        
+        header_layout.addWidget(icon_label)
+        header_layout.addWidget(title_label)
+        header_layout.addStretch()
+        layout.addLayout(header_layout)
+        
+        # Stats row - horizontal compact layout
+        stats_layout = QHBoxLayout()
+        stats_layout.setSpacing(20)
+        
+        # Saved
+        saved_label = QLabel(f"[OK] {self.successful} Saved")
+        saved_label.setStyleSheet("color: #2ea043; font-size: 12px; font-weight: bold;")
+        stats_layout.addWidget(saved_label)
+        
+        # Failed
+        failed_label = QLabel(f"[X] {self.failed} Failed")
+        failed_label.setStyleSheet("color: #f85149; font-size: 12px; font-weight: bold;")
+        stats_layout.addWidget(failed_label)
+        
+        # Skipped
+        skipped_label = QLabel(f"[>>] {self.skipped} Skipped")
+        skipped_label.setStyleSheet("color: #7d8590; font-size: 12px; font-weight: bold;")
+        stats_layout.addWidget(skipped_label)
+        
+        stats_layout.addStretch()
+        layout.addLayout(stats_layout)
+        
+        # Output location
+        location_frame = QFrame()
+        location_frame.setStyleSheet("""
+            QFrame {
+                background: rgba(88, 166, 255, 0.1);
+                border: 1px solid rgba(88, 166, 255, 0.3);
+                border-radius: 6px;
+                padding: 8px;
+            }
+        """)
+        
+        location_layout = QVBoxLayout(location_frame)
+        location_layout.setSpacing(2)
+        location_layout.setContentsMargins(8, 6, 8, 6)
+        
+        location_title = QLabel("Output Location")
+        location_title.setStyleSheet("color: #58a6ff; font-size: 10px; font-weight: bold;")
+        
+        location_path = QLabel(self.output_dir)
+        location_path.setStyleSheet("""
+            color: #f0f6fc;
+            font-size: 10px;
+            font-family: 'Consolas', monospace;
+            background: rgba(33, 38, 45, 0.5);
+            padding: 3px 6px;
+            border-radius: 3px;
+        """)
+        location_path.setWordWrap(True)
+        
+        location_layout.addWidget(location_title)
+        location_layout.addWidget(location_path)
+        layout.addWidget(location_frame)
+        
+        layout.addStretch()
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(10)
+        
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(self.accept)
+        self.style_button_secondary(close_btn)
+        
+        open_btn = QPushButton("Open Folder")
+        open_btn.clicked.connect(self.open_folder)
+        self.style_button_primary(open_btn)
+        
+        button_layout.addStretch()
+        button_layout.addWidget(close_btn)
+        button_layout.addWidget(open_btn)
+        layout.addLayout(button_layout)
+    
+    def open_folder(self):
+        """Open the output folder"""
+        import subprocess
+        import platform
+        
+        try:
+            system = platform.system()
+            if system == "Windows":
+                subprocess.run(['explorer', str(self.output_dir)])
+            elif system == "Darwin":
+                subprocess.run(['open', str(self.output_dir)])
+            else:
+                subprocess.run(['xdg-open', str(self.output_dir)])
+            self.accept()
+        except Exception as e:
+            pass
+    
+    def style_button_primary(self, btn):
+        btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #238636, stop:1 #2ea043);
+                color: white;
+                border: none;
+                border-radius: 0px;
+                font-size: 12px;
+                font-weight: bold;
+                padding: 8px 16px;
+                min-width: 100px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #2ea043, stop:1 #238636);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #1e6f2f, stop:1 #238636);
+            }
+        """)
+    
+    def style_button_secondary(self, btn):
+        btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(33, 38, 45, 0.8);
+                color: #f0f6fc;
+                border: 2px solid #30363d;
+                border-radius: 0px;
+                font-size: 12px;
+                font-weight: bold;
+                padding: 8px 16px;
+                min-width: 80px;
+            }
+            QPushButton:hover {
+                border-color: #58a6ff;
+                background: rgba(22, 27, 34, 0.9);
+                color: #58a6ff;
+            }
+            QPushButton:pressed {
+                background: rgba(88, 166, 255, 0.1);
+            }
+        """)
+
+
+class VideoEditCompleteDialog(QDialog):
+    """Modern dialog for video editing completion"""
+    def __init__(self, parent, successful, failed, output_folder, stopped=False):
+        super().__init__(parent)
+        self.successful = successful
+        self.failed = failed
+        self.output_folder = output_folder
+        self.stopped = stopped
+        self.setup_dialog()
+    
+    def setup_dialog(self):
+        self.setWindowTitle("Edit Complete")
+        self.setFixedSize(420, 320)
+        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.WindowCloseButtonHint)
+        
+        self.setStyleSheet("""
+            QDialog {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #1a1f2e, stop:1 #0d1117);
+                color: #e6edf3;
+            }
+            QLabel {
+                color: #e6edf3;
+                background: transparent;
+            }
+        """)
+        
+        layout = QVBoxLayout(self)
+        layout.setSpacing(16)
+        layout.setContentsMargins(24, 24, 24, 24)
+        
+        # Header with icon
+        header_layout = QHBoxLayout()
+        
+        if self.stopped:
+            icon_text = "!"
+            icon_color = "#ffab00"
+            title_text = "Editing Stopped"
+        elif self.failed > 0 and self.successful == 0:
+            icon_text = "X"
+            icon_color = "#f85149"
+            title_text = "Editing Failed"
+        else:
+            icon_text = "OK"  # checkmark
+            icon_color = "#2ea043"
+            title_text = "Editing Complete"
+        
+        icon_label = QLabel(icon_text)
+        icon_label.setFixedSize(50, 50)
+        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon_label.setStyleSheet(f"""
+            QLabel {{
+                background: {icon_color};
+                color: white;
+                border-radius: 25px;
+                font-size: 24px;
+                font-weight: bold;
+            }}
+        """)
+        header_layout.addWidget(icon_label)
+        
+        title_label = QLabel(title_text)
+        title_label.setStyleSheet(f"color: {icon_color}; font-size: 18px; font-weight: bold; margin-left: 12px;")
+        header_layout.addWidget(title_label)
+        header_layout.addStretch()
+        layout.addLayout(header_layout)
+        
+        # Stats cards
+        stats_layout = QHBoxLayout()
+        stats_layout.setSpacing(12)
+        
+        # Successful card
+        success_card = QFrame()
+        success_card.setStyleSheet("""
+            QFrame {
+                background: rgba(46, 160, 67, 0.15);
+                border: 1px solid #2ea043;
+                border-radius: 8px;
+                padding: 12px;
+            }
+        """)
+        success_layout = QVBoxLayout(success_card)
+        success_layout.setSpacing(4)
+        success_num = QLabel(str(self.successful))
+        success_num.setStyleSheet("color: #2ea043; font-size: 28px; font-weight: bold;")
+        success_num.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        success_layout.addWidget(success_num)
+        success_text = QLabel("Successful")
+        success_text.setStyleSheet("color: #7d8590; font-size: 11px;")
+        success_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        success_layout.addWidget(success_text)
+        stats_layout.addWidget(success_card)
+        
+        # Failed card
+        failed_card = QFrame()
+        failed_card.setStyleSheet("""
+            QFrame {
+                background: rgba(248, 81, 73, 0.15);
+                border: 1px solid #f85149;
+                border-radius: 8px;
+                padding: 12px;
+            }
+        """)
+        failed_layout = QVBoxLayout(failed_card)
+        failed_layout.setSpacing(4)
+        failed_num = QLabel(str(self.failed))
+        failed_num.setStyleSheet("color: #f85149; font-size: 28px; font-weight: bold;")
+        failed_num.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        failed_layout.addWidget(failed_num)
+        failed_text = QLabel("Failed")
+        failed_text.setStyleSheet("color: #7d8590; font-size: 11px;")
+        failed_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        failed_layout.addWidget(failed_text)
+        stats_layout.addWidget(failed_card)
+        
+        layout.addLayout(stats_layout)
+        
+        # Output folder
+        folder_frame = QFrame()
+        folder_frame.setStyleSheet("""
+            QFrame {
+                background: rgba(45, 51, 59, 0.5);
+                border: 1px solid #30363d;
+                border-radius: 8px;
+                padding: 10px;
+            }
+        """)
+        folder_layout = QVBoxLayout(folder_frame)
+        folder_layout.setSpacing(4)
+        
+        folder_title = QLabel("Output Location")
+        folder_title.setStyleSheet("color: #58a6ff; font-size: 11px; font-weight: bold;")
+        folder_layout.addWidget(folder_title)
+        
+        folder_path = QLabel(self.output_folder)
+        folder_path.setStyleSheet("color: #8b949e; font-size: 10px;")
+        folder_path.setWordWrap(True)
+        folder_layout.addWidget(folder_path)
+        
+        layout.addWidget(folder_frame)
+        
+        layout.addStretch()
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(12)
+        btn_layout.addStretch()
+        
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(self.accept)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                color: #e6edf3;
+                border: 1px solid #444c56;
+                border-radius: 6px;
+                padding: 10px 24px;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: rgba(255, 255, 255, 0.05);
+                border-color: #58a6ff;
+            }
+        """)
+        btn_layout.addWidget(close_btn)
+        
+        open_btn = QPushButton("Open Folder")
+        open_btn.clicked.connect(self.open_folder)
+        open_btn.setStyleSheet("""
+            QPushButton {
+                background: #238636;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 10px 24px;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: #2ea043;
+            }
+        """)
+        btn_layout.addWidget(open_btn)
+        
+        layout.addLayout(btn_layout)
+    
+    def open_folder(self):
+        import subprocess
+        import platform
+        try:
+            if platform.system() == 'Windows':
+                subprocess.run(['explorer', self.output_folder])
+            elif platform.system() == 'Darwin':
+                subprocess.run(['open', self.output_folder])
+            else:
+                subprocess.run(['xdg-open', self.output_folder])
+        except Exception:
+            pass
+        self.accept()
+
+
+class LicenseActivationDialog(QDialog):
+    """Modern license activation dialog with dark overlay"""
+    
+    def __init__(self, parent=None, license_client=None):
+        super().__init__(parent)
+        self.license_client = license_client
+        self.activated = False
+        self._parent = parent
+        self.setup_dialog()
+    
+    def setup_dialog(self):
+        self.setWindowTitle("License Activation")
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        
+        # Match parent window size if available, otherwise use screen
+        if self._parent:
+            self.setGeometry(self._parent.geometry())
+        else:
+            screen = QApplication.primaryScreen().geometry()
+            self.setGeometry(screen)
+        
+        # Main layout - overlay on parent window
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Dark overlay background
+        overlay = QWidget()
+        overlay.setStyleSheet("background-color: rgba(0, 0, 0, 180);")
+        overlay_layout = QVBoxLayout(overlay)
+        overlay_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # Center dialog card
+        card = QWidget()
+        card.setFixedSize(520, 480)
+        card.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 #1a1f2e, stop:1 #0d1117);
+                border-radius: 16px;
+                border: 1px solid #30363d;
+            }
+        """)
+        
+        card_layout = QVBoxLayout(card)
+        card_layout.setSpacing(20)
+        card_layout.setContentsMargins(40, 30, 40, 40)
+        
+        # Close button row
+        close_row = QHBoxLayout()
+        close_row.addStretch()
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(32, 32)
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                color: #8b949e;
+                border: none;
+                border-radius: 16px;
+                font-size: 18px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: rgba(255, 255, 255, 0.1);
+                color: #f85149;
+            }
+        """)
+        close_btn.clicked.connect(self.reject)
+        close_row.addWidget(close_btn)
+        card_layout.addLayout(close_row)
+        
+        # Header
+        header = QLabel("🔐 License Activation")
+        header.setStyleSheet("font-size: 24px; font-weight: bold; color: #58a6ff; background: transparent; border: none;")
+        header.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        card_layout.addWidget(header)
+        
+        # Description
+        desc = QLabel("Enter your license key to activate the application.\nYou can purchase a license from our website.")
+        desc.setStyleSheet("color: #8b949e; font-size: 13px; background: transparent; border: none;")
+        desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        card_layout.addWidget(desc)
+        
+        card_layout.addSpacing(10)
+        
+        # License key input
+        key_label = QLabel("License Key")
+        key_label.setStyleSheet("font-size: 12px; color: #8b949e; font-weight: bold; background: transparent; border: none;")
+        card_layout.addWidget(key_label)
+        
+        self.key_input = QLineEdit()
+        self.key_input.setPlaceholderText("XXXX-XXXX-XXXX-XXXX")
+        self.key_input.setMaxLength(19)
+        self.key_input.setStyleSheet("""
+            QLineEdit {
+                background: #2d333b;
+                color: #e6edf3;
+                border: 2px solid #444c56;
+                border-radius: 8px;
+                padding: 12px 16px;
+                font-size: 16px;
+                font-family: 'Consolas', monospace;
+                letter-spacing: 2px;
+            }
+            QLineEdit:focus {
+                border-color: #58a6ff;
+            }
+        """)
+        self.key_input.textChanged.connect(self.format_license_key)
+        card_layout.addWidget(self.key_input)
+        
+        # Status label
+        self.status_label = QLabel("")
+        self.status_label.setStyleSheet("font-size: 12px; background: transparent; border: none;")
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        card_layout.addWidget(self.status_label)
+        
+        card_layout.addStretch()
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(12)
+        
+        self.activate_btn = QPushButton("Activate License")
+        self.activate_btn.setMinimumHeight(48)
+        self.activate_btn.setStyleSheet("""
+            QPushButton {
+                background: #238636;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 14px 32px;
+                font-size: 15px;
+                font-weight: bold;
+                min-width: 200px;
+            }
+            QPushButton:hover {
+                background: #2ea043;
+            }
+            QPushButton:disabled {
+                background: #21262d;
+                color: #484f58;
+            }
+        """)
+        self.activate_btn.clicked.connect(self.activate_license)
+        btn_layout.addWidget(self.activate_btn)
+        
+        card_layout.addLayout(btn_layout)
+        
+        # Trial info
+        trial_info = QLabel("Need a license? Visit our website or contact support.")
+        trial_info.setStyleSheet("color: #6e7681; font-size: 11px; background: transparent; border: none;")
+        trial_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        card_layout.addWidget(trial_info)
+        
+        overlay_layout.addWidget(card)
+        main_layout.addWidget(overlay)
+    
+    def format_license_key(self, text):
+        """Auto-format license key with dashes"""
+        # Remove all non-alphanumeric characters
+        clean = ''.join(c for c in text.upper() if c.isalnum())
+        
+        # Add dashes every 4 characters
+        formatted = '-'.join([clean[i:i+4] for i in range(0, len(clean), 4)])
+        
+        # Update input without triggering signal loop
+        if formatted != text:
+            self.key_input.blockSignals(True)
+            self.key_input.setText(formatted[:19])  # Max 19 chars (XXXX-XXXX-XXXX-XXXX)
+            self.key_input.setCursorPosition(len(formatted[:19]))
+            self.key_input.blockSignals(False)
+    
+    def activate_license(self):
+        """Validate and activate the license"""
+        license_key = self.key_input.text().strip()
+        
+        if len(license_key) < 19:
+            self.status_label.setText("⚠️ Please enter a valid license key")
+            self.status_label.setStyleSheet("color: #d29922; font-size: 12px;")
+            return
+        
+        self.activate_btn.setEnabled(False)
+        self.activate_btn.setText("Validating...")
+        self.status_label.setText("🔄 Connecting to license server...")
+        self.status_label.setStyleSheet("color: #8b949e; font-size: 12px;")
+        QApplication.processEvents()
+        
+        if self.license_client:
+            result = self.license_client.validate(license_key)
+            
+            if result.get("valid"):
+                self.status_label.setText("✅ License activated successfully!")
+                self.status_label.setStyleSheet("color: #3fb950; font-size: 12px;")
+                self.activated = True
+                
+                # Show success message
+                QTimer.singleShot(1500, self.accept)
+            else:
+                error = result.get("error", "Unknown error")
+                self.status_label.setText(f"❌ {error}")
+                self.status_label.setStyleSheet("color: #f85149; font-size: 12px;")
+                self.activate_btn.setEnabled(True)
+                self.activate_btn.setText("Activate License")
+        else:
+            self.status_label.setText("❌ License system not available")
+            self.status_label.setStyleSheet("color: #f85149; font-size: 12px;")
+            self.activate_btn.setEnabled(True)
+            self.activate_btn.setText("Activate License")
+
+class VideoEditSettingsDialog(QDialog):
+    """Dialog for video editing settings - Modern professional design"""
+    def __init__(self, parent, settings=None):
+        super().__init__(parent)
+        self.settings = settings or {}
+        self.setup_dialog()
+        # Apply initial state based on loaded settings
+        self.apply_initial_state()
+    
+    def apply_initial_state(self):
+        """Apply initial enabled/disabled state based on settings"""
+        # Resolution custom fields
+        self.on_resolution_changed(self.resolution_combo.currentText())
+        # Trim fields
+        self.on_trim_toggled(self.enable_trim.isChecked())
+        # Logo fields
+        self.on_logo_toggled(self.enable_logo.isChecked())
+    
+    def setup_dialog(self):
+        self.setWindowTitle("Video Edit Settings")
+        self.setFixedSize(950, 720)
+        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.WindowCloseButtonHint)
+        
+        self.setStyleSheet("""
+            QDialog {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 #1a1f2e, stop:1 #0d1117);
+                color: #e6edf3;
+            }
+            QLabel {
+                color: #8b949e;
+                background: transparent;
+                font-size: 11px;
+            }
+            QComboBox {
+                background: #2d333b;
+                color: #e6edf3;
+                border: 1px solid #444c56;
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-size: 12px;
+            }
+            QComboBox:hover {
+                border-color: #58a6ff;
+            }
+            QComboBox:disabled {
+                background: #161b22;
+                color: #484f58;
+                border-color: #30363d;
+            }
+            QComboBox::drop-down {
+                border: none;
+                width: 20px;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 5px solid #8b949e;
+                margin-right: 8px;
+            }
+            QComboBox QAbstractItemView {
+                background: #2d333b;
+                color: #e6edf3;
+                border: 1px solid #444c56;
+                selection-background-color: #388bfd;
+            }
+            QSpinBox, QDoubleSpinBox {
+                background: #2d333b;
+                color: #e6edf3;
+                border: 1px solid #444c56;
+                border-radius: 6px;
+                padding: 6px 10px;
+                font-size: 12px;
+            }
+            QSpinBox:hover, QDoubleSpinBox:hover {
+                border-color: #58a6ff;
+            }
+            QSpinBox:disabled, QDoubleSpinBox:disabled {
+                background: #161b22;
+                color: #484f58;
+                border-color: #30363d;
+            }
+            QLineEdit {
+                background: #2d333b;
+                color: #e6edf3;
+                border: 1px solid #444c56;
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-size: 12px;
+            }
+            QLineEdit:hover { border-color: #58a6ff; }
+            QLineEdit:disabled {
+                background: #161b22;
+                color: #484f58;
+                border-color: #30363d;
+            }
+            QCheckBox {
+                color: #e6edf3;
+                spacing: 8px;
+                font-size: 12px;
+            }
+            QCheckBox::indicator {
+                width: 18px;
+                height: 18px;
+                border-radius: 4px;
+                border: 2px solid #444c56;
+                background: #22272e;
+            }
+            QCheckBox::indicator:hover { border-color: #58a6ff; }
+            QCheckBox::indicator:checked {
+                background: #58a6ff;
+                border-color: #58a6ff;
+            }
+        """)
+        
+        main_layout = QVBoxLayout(self)
+        main_layout.setSpacing(16)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        
+        # === 3 PANEL LAYOUT ===
+        panels_layout = QHBoxLayout()
+        panels_layout.setSpacing(12)
+        
+        # --- PANEL 1: Output ---
+        panel1 = QFrame()
+        panel1.setObjectName("panel")
+        panel1.setStyleSheet("QFrame#panel { background: rgba(45,51,59,0.4); border: 1px solid #30363d; border-radius: 10px; }")
+        p1_layout = QVBoxLayout(panel1)
+        p1_layout.setSpacing(8)
+        p1_layout.setContentsMargins(14, 14, 14, 14)
+        
+        p1_header = QLabel("[>] OUTPUT")
+        p1_header.setStyleSheet("color: #58a6ff; font-weight: bold; font-size: 11px;")
+        p1_layout.addWidget(p1_header)
+        
+        res_label = QLabel("Resolution")
+        p1_layout.addWidget(res_label)
+        self.resolution_combo = QComboBox()
+        self.resolution_combo.addItems(["Original", "4K", "2K", "1080p", "720p", "480p", "Custom"])
+        self.resolution_combo.setCurrentText(self.settings.get('resolution', 'Original'))
+        self.resolution_combo.currentTextChanged.connect(self.on_resolution_changed)
+        p1_layout.addWidget(self.resolution_combo)
+        
+        size_row = QHBoxLayout()
+        size_row.setSpacing(6)
+        self.custom_width = QSpinBox()
+        self.custom_width.setRange(100, 7680)
+        self.custom_width.setValue(self.settings.get('custom_width', 1920))
+        self.custom_width.setEnabled(False)
+        self.custom_width.setPrefix("W:")
+        size_row.addWidget(self.custom_width)
+        self.custom_height = QSpinBox()
+        self.custom_height.setRange(100, 4320)
+        self.custom_height.setValue(self.settings.get('custom_height', 1080))
+        self.custom_height.setEnabled(False)
+        self.custom_height.setPrefix("H:")
+        size_row.addWidget(self.custom_height)
+        p1_layout.addLayout(size_row)
+        
+        fmt_label = QLabel("Format")
+        p1_layout.addWidget(fmt_label)
+        self.output_format = QComboBox()
+        self.output_format.addItems(["MP4 (H.264)", "MP4 (H.265)", "WebM", "AVI", "MOV", "MKV"])
+        self.output_format.setCurrentText(self.settings.get('output_format', 'MP4 (H.264)'))
+        p1_layout.addWidget(self.output_format)
+        
+        crf_label = QLabel("Quality (CRF)")
+        p1_layout.addWidget(crf_label)
+        self.quality_crf = QSpinBox()
+        self.quality_crf.setRange(0, 51)
+        self.quality_crf.setValue(self.settings.get('quality_crf', 23))
+        p1_layout.addWidget(self.quality_crf)
+        p1_layout.addStretch()
+        panels_layout.addWidget(panel1)
+        
+        # --- PANEL 2: Playback & Trim ---
+        panel2 = QFrame()
+        panel2.setObjectName("panel")
+        panel2.setStyleSheet("QFrame#panel { background: rgba(45,51,59,0.4); border: 1px solid #30363d; border-radius: 10px; }")
+        p2_layout = QVBoxLayout(panel2)
+        p2_layout.setSpacing(8)
+        p2_layout.setContentsMargins(14, 14, 14, 14)
+        
+        p2_header = QLabel("[~] PLAYBACK")
+        p2_header.setStyleSheet("color: #58a6ff; font-weight: bold; font-size: 11px;")
+        p2_layout.addWidget(p2_header)
+        
+        speed_vol_row = QHBoxLayout()
+        speed_vol_row.setSpacing(6)
+        speed_col = QVBoxLayout()
+        speed_col.setSpacing(2)
+        speed_col.addWidget(QLabel("Speed"))
+        self.speed = QDoubleSpinBox()
+        self.speed.setRange(0.25, 4.0)
+        self.speed.setSingleStep(0.25)
+        self.speed.setValue(self.settings.get('speed', 1.0))
+        self.speed.setSuffix("x")
+        speed_col.addWidget(self.speed)
+        speed_vol_row.addLayout(speed_col)
+        vol_col = QVBoxLayout()
+        vol_col.setSpacing(2)
+        vol_col.addWidget(QLabel("Volume"))
+        self.volume = QSpinBox()
+        self.volume.setRange(0, 300)
+        self.volume.setValue(self.settings.get('volume', 100))
+        self.volume.setSuffix("%")
+        vol_col.addWidget(self.volume)
+        speed_vol_row.addLayout(vol_col)
+        p2_layout.addLayout(speed_vol_row)
+        
+        self.mute_audio = QCheckBox("Mute Audio")
+        self.mute_audio.setChecked(self.settings.get('mute_audio', False))
+        p2_layout.addWidget(self.mute_audio)
+        
+        sep = QFrame()
+        sep.setFixedHeight(1)
+        sep.setStyleSheet("background: #30363d;")
+        p2_layout.addWidget(sep)
+        
+        p2_trim = QLabel("[/] TRIM")
+        p2_trim.setStyleSheet("color: #58a6ff; font-weight: bold; font-size: 11px;")
+        p2_layout.addWidget(p2_trim)
+        
+        self.enable_trim = QCheckBox("Enable Trim")
+        self.enable_trim.setChecked(self.settings.get('enable_trim', False))
+        self.enable_trim.toggled.connect(self.on_trim_toggled)
+        p2_layout.addWidget(self.enable_trim)
+        
+        trim_row = QHBoxLayout()
+        trim_row.setSpacing(6)
+        start_col = QVBoxLayout()
+        start_col.setSpacing(2)
+        start_col.addWidget(QLabel("Start"))
+        self.trim_start = QDoubleSpinBox()
+        self.trim_start.setRange(0, 99999)
+        self.trim_start.setValue(self.settings.get('trim_start', 0))
+        self.trim_start.setSuffix("s")
+        self.trim_start.setEnabled(False)
+        start_col.addWidget(self.trim_start)
+        trim_row.addLayout(start_col)
+        end_col = QVBoxLayout()
+        end_col.setSpacing(2)
+        end_col.addWidget(QLabel("End"))
+        self.trim_end = QDoubleSpinBox()
+        self.trim_end.setRange(0, 99999)
+        self.trim_end.setValue(self.settings.get('trim_end', 0))
+        self.trim_end.setSuffix("s")
+        self.trim_end.setEnabled(False)
+        end_col.addWidget(self.trim_end)
+        trim_row.addLayout(end_col)
+        p2_layout.addLayout(trim_row)
+        p2_layout.addStretch()
+        panels_layout.addWidget(panel2)
+        
+        # --- PANEL 3: Watermark ---
+        panel3 = QFrame()
+        panel3.setObjectName("panel")
+        panel3.setStyleSheet("QFrame#panel { background: rgba(45,51,59,0.4); border: 1px solid #30363d; border-radius: 10px; }")
+        p3_layout = QVBoxLayout(panel3)
+        p3_layout.setSpacing(8)
+        p3_layout.setContentsMargins(14, 14, 14, 14)
+        
+        p3_header = QLabel("[*] WATERMARK")
+        p3_header.setStyleSheet("color: #58a6ff; font-weight: bold; font-size: 11px;")
+        p3_layout.addWidget(p3_header)
+        
+        self.enable_logo = QCheckBox("Enable Watermark")
+        self.enable_logo.setChecked(self.settings.get('enable_logo', False))
+        self.enable_logo.toggled.connect(self.on_logo_toggled)
+        p3_layout.addWidget(self.enable_logo)
+        
+        # Watermark type selector
+        type_label = QLabel("Type")
+        p3_layout.addWidget(type_label)
+        self.watermark_type = QComboBox()
+        self.watermark_type.addItems(["Image", "Text"])
+        self.watermark_type.setCurrentText(self.settings.get('watermark_type', 'Image'))
+        self.watermark_type.setEnabled(False)
+        self.watermark_type.currentTextChanged.connect(self.on_watermark_type_changed)
+        p3_layout.addWidget(self.watermark_type)
+        
+        # Image watermark controls
+        self.image_watermark_widget = QWidget()
+        image_layout = QVBoxLayout(self.image_watermark_widget)
+        image_layout.setContentsMargins(0, 0, 0, 0)
+        image_layout.setSpacing(6)
+        
+        file_row = QHBoxLayout()
+        file_row.setSpacing(4)
+        self.logo_path = QLineEdit()
+        self.logo_path.setPlaceholderText("Logo image...")
+        self.logo_path.setText(self.settings.get('logo_path', ''))
+        self.logo_path.setEnabled(False)
+        file_row.addWidget(self.logo_path)
+        self.browse_logo_btn = QPushButton("...")
+        self.browse_logo_btn.setFixedWidth(30)
+        self.browse_logo_btn.clicked.connect(self.browse_logo)
+        self.browse_logo_btn.setEnabled(False)
+        self.browse_logo_btn.setStyleSheet("QPushButton { background: #2d333b; color: #e6edf3; border: 1px solid #444c56; border-radius: 6px; padding: 4px; } QPushButton:hover { border-color: #58a6ff; } QPushButton:disabled { background: #161b22; color: #484f58; }")
+        file_row.addWidget(self.browse_logo_btn)
+        image_layout.addLayout(file_row)
+        
+        # Logo shape (for image only)
+        shape_label_img = QLabel("Shape")
+        image_layout.addWidget(shape_label_img)
+        self.logo_shape = QComboBox()
+        self.logo_shape.addItems(["None", "Circle", "Rounded", "Square", "Triangle"])
+        self.logo_shape.setCurrentText(self.settings.get('logo_shape', 'None'))
+        self.logo_shape.setEnabled(False)
+        image_layout.addWidget(self.logo_shape)
+        
+        p3_layout.addWidget(self.image_watermark_widget)
+        
+        # Text watermark controls
+        self.text_watermark_widget = QWidget()
+        text_layout = QVBoxLayout(self.text_watermark_widget)
+        text_layout.setContentsMargins(0, 0, 0, 0)
+        text_layout.setSpacing(6)
+        
+        text_input_label = QLabel("Text")
+        text_layout.addWidget(text_input_label)
+        self.watermark_text = QLineEdit()
+        self.watermark_text.setPlaceholderText("Enter watermark text...")
+        self.watermark_text.setText(self.settings.get('watermark_text', ''))
+        self.watermark_text.setEnabled(False)
+        text_layout.addWidget(self.watermark_text)
+        
+        # Font size and color row
+        font_row = QHBoxLayout()
+        font_row.setSpacing(6)
+        
+        font_col = QVBoxLayout()
+        font_col.setSpacing(2)
+        font_col.addWidget(QLabel("Font Size"))
+        self.text_font_size = QSpinBox()
+        self.text_font_size.setRange(12, 200)
+        self.text_font_size.setValue(self.settings.get('text_font_size', 48))
+        self.text_font_size.setEnabled(False)
+        font_col.addWidget(self.text_font_size)
+        font_row.addLayout(font_col)
+        
+        color_col = QVBoxLayout()
+        color_col.setSpacing(2)
+        color_col.addWidget(QLabel("Color"))
+        self.text_color_btn = QPushButton()
+        self.text_color = self.settings.get('text_color', '#FFFFFF')
+        self.text_color_btn.setStyleSheet(f"QPushButton {{ background: {self.text_color}; border: 1px solid #444c56; border-radius: 6px; min-height: 28px; }} QPushButton:hover {{ border-color: #58a6ff; }} QPushButton:disabled {{ background: #484f58; }}")
+        self.text_color_btn.clicked.connect(self.pick_text_color)
+        self.text_color_btn.setEnabled(False)
+        color_col.addWidget(self.text_color_btn)
+        font_row.addLayout(color_col)
+        
+        text_layout.addLayout(font_row)
+        
+        p3_layout.addWidget(self.text_watermark_widget)
+        self.text_watermark_widget.hide()  # Hidden by default (Image is default)
+        
+        # Common controls for both types
+        pos_label = QLabel("Position")
+        p3_layout.addWidget(pos_label)
+        self.logo_position = QComboBox()
+        self.logo_position.addItems(["Top-Left", "Top-Right", "Bottom-Left", "Bottom-Right", "Center"])
+        self.logo_position.setCurrentText(self.settings.get('logo_position', 'Bottom-Right'))
+        self.logo_position.setEnabled(False)
+        p3_layout.addWidget(self.logo_position)
+        
+        op_scale_row = QHBoxLayout()
+        op_scale_row.setSpacing(6)
+        op_col = QVBoxLayout()
+        op_col.setSpacing(2)
+        op_col.addWidget(QLabel("Opacity"))
+        self.logo_opacity = QSpinBox()
+        self.logo_opacity.setRange(10, 100)
+        self.logo_opacity.setValue(self.settings.get('logo_opacity', 80))
+        self.logo_opacity.setSuffix("%")
+        self.logo_opacity.setEnabled(False)
+        op_col.addWidget(self.logo_opacity)
+        op_scale_row.addLayout(op_col)
+        scale_col = QVBoxLayout()
+        scale_col.setSpacing(2)
+        scale_col.addWidget(QLabel("Scale"))
+        self.logo_scale = QSpinBox()
+        self.logo_scale.setRange(5, 100)
+        self.logo_scale.setValue(self.settings.get('logo_scale', 15))
+        self.logo_scale.setSuffix("%")
+        self.logo_scale.setEnabled(False)
+        scale_col.addWidget(self.logo_scale)
+        op_scale_row.addLayout(scale_col)
+        p3_layout.addLayout(op_scale_row)
+        
+        # Animation options
+        anim_label = QLabel("Animation")
+        p3_layout.addWidget(anim_label)
+        self.watermark_animation = QComboBox()
+        self.watermark_animation.addItems([
+            "None", 
+            "Fade In", 
+            "Fade In/Out",
+            "Slide In Left",
+            "Slide In Right", 
+            "Slide In Top",
+            "Slide In Bottom",
+            "Zoom In",
+            "Pulse"
+        ])
+        self.watermark_animation.setCurrentText(self.settings.get('watermark_animation', 'None'))
+        self.watermark_animation.setEnabled(False)
+        self.watermark_animation.setToolTip("Animation effect for watermark appearance")
+        p3_layout.addWidget(self.watermark_animation)
+        
+        # Animation duration
+        anim_dur_row = QHBoxLayout()
+        anim_dur_row.setSpacing(6)
+        anim_dur_col = QVBoxLayout()
+        anim_dur_col.setSpacing(2)
+        anim_dur_col.addWidget(QLabel("Duration"))
+        self.animation_duration = QDoubleSpinBox()
+        self.animation_duration.setRange(0.5, 5.0)
+        self.animation_duration.setSingleStep(0.5)
+        self.animation_duration.setValue(self.settings.get('animation_duration', 1.0))
+        self.animation_duration.setSuffix("s")
+        self.animation_duration.setEnabled(False)
+        self.animation_duration.setToolTip("Animation duration in seconds")
+        anim_dur_col.addWidget(self.animation_duration)
+        anim_dur_row.addLayout(anim_dur_col)
+        anim_dur_row.addStretch()
+        p3_layout.addLayout(anim_dur_row)
+        
+        p3_layout.addStretch()
+        panels_layout.addWidget(panel3)
+        
+        main_layout.addLayout(panels_layout)
+        
+        # === OUTPUT OPTIONS ROW ===
+        output_frame = QFrame()
+        output_frame.setStyleSheet("QFrame { background: rgba(45,51,59,0.3); border: 1px solid #30363d; border-radius: 8px; }")
+        output_layout = QHBoxLayout(output_frame)
+        output_layout.setContentsMargins(12, 8, 12, 8)
+        output_layout.setSpacing(20)
+        
+        output_title = QLabel("OUTPUT:")
+        output_title.setStyleSheet("color: #58a6ff; font-weight: bold; font-size: 11px;")
+        output_layout.addWidget(output_title)
+        
+        self.replace_original = QCheckBox("Replace Original")
+        self.replace_original.setChecked(self.settings.get('replace_original', False))
+        self.replace_original.setToolTip("Overwrite the original video file")
+        output_layout.addWidget(self.replace_original)
+        
+        self.same_folder = QCheckBox("Same Folder")
+        self.same_folder.setChecked(self.settings.get('same_folder', False))
+        self.same_folder.setToolTip("Save edited video in the same folder as original")
+        output_layout.addWidget(self.same_folder)
+        
+        self.add_suffix = QCheckBox("Add '_edited' Suffix")
+        self.add_suffix.setChecked(self.settings.get('add_suffix', True))
+        self.add_suffix.setToolTip("Add '_edited' to the output filename")
+        output_layout.addWidget(self.add_suffix)
+        
+        output_layout.addStretch()
+        main_layout.addWidget(output_frame)
+        
+        # === BUTTONS ===
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(12)
+        btn_layout.addStretch()
+        
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        cancel_btn.setStyleSheet("QPushButton { background: transparent; color: #e6edf3; border: 1px solid #444c56; border-radius: 6px; padding: 10px 24px; font-size: 12px; font-weight: bold; } QPushButton:hover { background: rgba(255,255,255,0.05); border-color: #58a6ff; }")
+        btn_layout.addWidget(cancel_btn)
+        
+        apply_btn = QPushButton("Apply")
+        apply_btn.clicked.connect(self.accept)
+        apply_btn.setStyleSheet("QPushButton { background: #238636; color: white; border: none; border-radius: 6px; padding: 10px 24px; font-size: 12px; font-weight: bold; } QPushButton:hover { background: #2ea043; }")
+        btn_layout.addWidget(apply_btn)
+        
+        main_layout.addLayout(btn_layout)
+        
+        # Apply initial watermark type visibility
+        self.on_watermark_type_changed(self.watermark_type.currentText())
+    
+    def on_resolution_changed(self, text):
+        is_custom = text == "Custom"
+        self.custom_width.setEnabled(is_custom)
+        self.custom_height.setEnabled(is_custom)
+    
+    def on_logo_toggled(self, checked):
+        self.watermark_type.setEnabled(checked)
+        self.logo_position.setEnabled(checked)
+        self.logo_opacity.setEnabled(checked)
+        self.logo_scale.setEnabled(checked)
+        self.watermark_animation.setEnabled(checked)
+        self.animation_duration.setEnabled(checked)
+        # Update type-specific controls
+        if checked:
+            self.on_watermark_type_changed(self.watermark_type.currentText())
+        else:
+            # Disable all type-specific controls
+            self.logo_path.setEnabled(False)
+            self.browse_logo_btn.setEnabled(False)
+            self.logo_shape.setEnabled(False)
+            self.watermark_text.setEnabled(False)
+            self.text_font_size.setEnabled(False)
+            self.text_color_btn.setEnabled(False)
+    
+    def on_watermark_type_changed(self, text):
+        is_image = text == "Image"
+        is_enabled = self.enable_logo.isChecked()
+        
+        # Show/hide appropriate widgets
+        self.image_watermark_widget.setVisible(is_image)
+        self.text_watermark_widget.setVisible(not is_image)
+        
+        # Enable/disable controls based on type and enabled state
+        self.logo_path.setEnabled(is_image and is_enabled)
+        self.browse_logo_btn.setEnabled(is_image and is_enabled)
+        self.logo_shape.setEnabled(is_image and is_enabled)
+        
+        self.watermark_text.setEnabled(not is_image and is_enabled)
+        self.text_font_size.setEnabled(not is_image and is_enabled)
+        self.text_color_btn.setEnabled(not is_image and is_enabled)
+    
+    def pick_text_color(self):
+        color = QColorDialog.getColor(QColor(self.text_color), self, "Select Text Color")
+        if color.isValid():
+            self.text_color = color.name()
+            self.text_color_btn.setStyleSheet(f"QPushButton {{ background: {self.text_color}; border: 1px solid #444c56; border-radius: 6px; min-height: 28px; }} QPushButton:hover {{ border-color: #58a6ff; }} QPushButton:disabled {{ background: #484f58; }}")
+    
+    def on_trim_toggled(self, checked):
+        self.trim_start.setEnabled(checked)
+        self.trim_end.setEnabled(checked)
+    
+    def browse_logo(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Select Logo Image", "", 
+            "Images (*.png *.jpg *.jpeg *.gif *.bmp *.webp);;All Files (*)"
+        )
+        if file_path:
+            self.logo_path.setText(file_path)
+    
+    def get_settings(self):
+        return {
+            'resolution': self.resolution_combo.currentText(),
+            'custom_width': self.custom_width.value(),
+            'custom_height': self.custom_height.value(),
+            'enable_logo': self.enable_logo.isChecked(),
+            'watermark_type': self.watermark_type.currentText(),
+            'logo_path': self.logo_path.text(),
+            'logo_position': self.logo_position.currentText(),
+            'logo_opacity': self.logo_opacity.value(),
+            'logo_scale': self.logo_scale.value(),
+            'logo_shape': self.logo_shape.currentText(),
+            'watermark_text': self.watermark_text.text(),
+            'text_font_size': self.text_font_size.value(),
+            'text_color': self.text_color,
+            'watermark_animation': self.watermark_animation.currentText(),
+            'animation_duration': self.animation_duration.value(),
+            'enable_trim': self.enable_trim.isChecked(),
+            'trim_start': self.trim_start.value(),
+            'trim_end': self.trim_end.value(),
+            'mute_audio': self.mute_audio.isChecked(),
+            'volume': self.volume.value(),
+            'speed': self.speed.value(),
+            'output_format': self.output_format.currentText(),
+            'quality_crf': self.quality_crf.value(),
+            'replace_original': self.replace_original.isChecked(),
+            'same_folder': self.same_folder.isChecked(),
+            'add_suffix': self.add_suffix.isChecked()
+        }
 
 
 class ProfileInfoWorker(QThread):
@@ -2012,6 +3377,7 @@ class MultipleDownloadWorker(QThread):
         self.paused = False
         self.stopped = False
         self._current_download_aborted = False
+        self.target_success = settings.get('target_success')  # Target number of successful downloads
         
     def run(self):
         total_urls = len(self.urls)
@@ -2022,7 +3388,12 @@ class MultipleDownloadWorker(QThread):
         
         for i, url in enumerate(self.urls):
             if self.stopped:
-                self.progress.emit("⏹ Downloads stopped by user")
+                self.progress.emit("[STOP] Downloads stopped by user")
+                break
+            
+            # Check if we've reached target successful downloads
+            if self.target_success and completed >= self.target_success:
+                self.progress.emit(f"[OK] Reached target of {self.target_success} successful downloads")
                 break
                 
             # Wait if paused
@@ -2030,12 +3401,17 @@ class MultipleDownloadWorker(QThread):
                 self.msleep(100)
                 
             if self.stopped:
-                self.progress.emit("⏹ Downloads stopped by user")
+                self.progress.emit("[STOP] Downloads stopped by user")
                 break
             
             self._current_download_aborted = False
             self.video_started.emit(i, url)
-            self.progress.emit(f"📥 Starting download {i+1}/{total_urls}: {url[:50]}...")
+            
+            # Show progress with target info if set
+            if self.target_success:
+                self.progress.emit(f"[DL] Downloading {completed + 1}/{self.target_success} (attempt {i+1}): {url[:50]}...")
+            else:
+                self.progress.emit(f"[DL] Starting download {i+1}/{total_urls}: {url[:50]}...")
             
             try:
                 # Create progress callback for current video that checks stop flag
@@ -2043,18 +3419,26 @@ class MultipleDownloadWorker(QThread):
                     if self.stopped:
                         self._current_download_aborted = True
                         raise Exception("Download stopped by user")
-                    self.progress.emit(f"[{i+1}/{total_urls}] {message}")
+                    
+                    # Show progress with target info if set
+                    if self.target_success:
+                        self.progress.emit(f"[{completed + 1}/{self.target_success}] {message}")
+                    else:
+                        self.progress.emit(f"[{i+1}/{total_urls}] {message}")
+                    
                     # Try to extract percentage from yt-dlp progress messages
                     if "%" in message and "Downloading:" in message:
                         try:
                             # Extract percentage from messages like "Downloading: 45.2%"
                             percent_str = message.split("%")[0].split()[-1]
                             percent = float(percent_str)
-                            self.progress_percent.emit(int(percent), f"Video {i+1}/{total_urls}")
+                            target = self.target_success if self.target_success else total_urls
+                            self.progress_percent.emit(int(percent), f"Video {completed + 1}/{target}")
                         except:
                             pass
                     elif "Completed:" in message:
-                        self.progress_percent.emit(100, f"Video {i+1}/{total_urls} complete")
+                        target = self.target_success if self.target_success else total_urls
+                        self.progress_percent.emit(100, f"Video {completed + 1}/{target} complete")
                 
                 result = self.dl.download(
                     url,
@@ -2069,7 +3453,7 @@ class MultipleDownloadWorker(QThread):
                 )
                 
                 if self.stopped or self._current_download_aborted:
-                    self.progress.emit("⏹ Downloads stopped by user")
+                    self.progress.emit("[STOP] Downloads stopped by user")
                     break
                 
                 if result['success']:
@@ -2077,21 +3461,33 @@ class MultipleDownloadWorker(QThread):
                     file_path = str(result['file_path']) if result['file_path'] else ""
                     successful_files.append(file_path)
                     self.video_completed.emit(i, True, "Download complete", file_path)
-                    self.progress.emit(f"✅ Completed {i+1}/{total_urls}: {url[:50]}")
+                    
+                    if self.target_success:
+                        self.progress.emit(f"[OK] Downloaded {completed}/{self.target_success}: {url[:50]}")
+                    else:
+                        self.progress.emit(f"[OK] Completed {i+1}/{total_urls}: {url[:50]}")
                 else:
                     failed += 1
                     failed_urls.append(url)
                     self.video_completed.emit(i, False, f"Failed: {result.get('error', 'Unknown error')}", "")
-                    self.progress.emit(f"❌ Failed {i+1}/{total_urls}: {url[:50]}")
+                    
+                    if self.target_success:
+                        self.progress.emit(f"[X] Failed (will try next): {url[:50]}")
+                    else:
+                        self.progress.emit(f"[X] Failed {i+1}/{total_urls}: {url[:50]}")
                     
             except Exception as e:
                 if self.stopped or "stopped by user" in str(e).lower():
-                    self.progress.emit("⏹ Downloads stopped by user")
+                    self.progress.emit("[STOP] Downloads stopped by user")
                     break
                 failed += 1
                 failed_urls.append(url)
                 self.video_completed.emit(i, False, f"Error: {str(e)}", "")
-                self.progress.emit(f"❌ Error {i+1}/{total_urls}: {str(e)}")
+                
+                if self.target_success:
+                    self.progress.emit(f"[X] Error (will try next): {str(e)[:50]}")
+                else:
+                    self.progress.emit(f"[X] Error {i+1}/{total_urls}: {str(e)}")
         
         # Send completion summary
         summary = {
@@ -2100,7 +3496,9 @@ class MultipleDownloadWorker(QThread):
             'failed': failed,
             'successful_files': successful_files,
             'failed_urls': failed_urls,
-            'stopped': self.stopped
+            'stopped': self.stopped,
+            'target_success': self.target_success,
+            'target_reached': self.target_success and completed >= self.target_success
         }
         self.batch_completed.emit(summary)
     
@@ -2119,7 +3517,7 @@ class MultipleDownloadWorker(QThread):
 
 
 class VideoDownloader:
-    """Core downloader"""
+    """Core downloader with professional error handling and recovery"""
     def __init__(self, output_dir="downloads"):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
@@ -2131,6 +3529,64 @@ class VideoDownloader:
             'twitter.com': 'Twitter', 'x.com': 'Twitter',
             'vimeo.com': 'Vimeo', 'twitch.tv': 'Twitch'
         }
+        # Cleanup temp files on init
+        self.cleanup_temp_files()
+    
+    def cleanup_temp_files(self, specific_file=None):
+        """Clean up leftover temp files (.ytdl, .part) that can cause permission errors"""
+        try:
+            if specific_file:
+                # Clean specific file's temp files
+                base_path = Path(specific_file)
+                temp_extensions = ['.ytdl', '.part', '.temp', '.tmp']
+                for ext in temp_extensions:
+                    temp_file = Path(str(base_path) + ext)
+                    if temp_file.exists():
+                        try:
+                            temp_file.unlink()
+                        except:
+                            pass
+            else:
+                # Clean all temp files in output directory
+                if self.output_dir.exists():
+                    for temp_file in self.output_dir.glob('*.ytdl'):
+                        try:
+                            temp_file.unlink()
+                        except:
+                            pass
+                    for temp_file in self.output_dir.glob('*.part'):
+                        try:
+                            # Only delete .part files older than 1 hour (might be active downloads)
+                            import time
+                            if time.time() - temp_file.stat().st_mtime > 3600:
+                                temp_file.unlink()
+                        except:
+                            pass
+        except Exception:
+            pass  # Silently ignore cleanup errors
+    
+    def check_file_locked(self, filepath):
+        """Check if a file is locked by another process"""
+        try:
+            if not Path(filepath).exists():
+                return False
+            # Try to open file exclusively
+            with open(filepath, 'a'):
+                return False
+        except (IOError, PermissionError):
+            return True
+    
+    def wait_for_file_unlock(self, filepath, timeout=10, callback=None):
+        """Wait for a file to become unlocked"""
+        import time
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            if not self.check_file_locked(filepath):
+                return True
+            if callback:
+                callback(f"[...] Waiting for file access... ({int(timeout - (time.time() - start_time))}s)")
+            time.sleep(1)
+        return False
     
     def detect_platform(self, url):
         domain = urlparse(url).netloc.lower().replace('www.', '')
@@ -2164,14 +3620,22 @@ class VideoDownloader:
         
         # Facebook profile/page patterns - including reels and videos pages
         elif 'facebook.com' in clean_url or 'fb.watch' in clean_url:
-            # Detect profile/page video collections
+            # Single video patterns - these are NOT profiles
+            single_video_patterns = [
+                '/watch/?v=', '/watch?v=', '/reel/', '/share/r/', '/share/v/',
+                'fb.watch/', '/video.php', '/videos/'
+            ]
+            # Check if it's a single video URL
+            is_single_video = any(pattern in url.lower() for pattern in single_video_patterns)
+            if is_single_video:
+                return False
+            
+            # Profile/page patterns
             profile_patterns = [
                 '/videos', '/reels', '/profile.php', '/pages/', '/people/'
             ]
-            # Check if it's a profile/page URL (not a single video)
-            is_single_video = '/watch/?v=' in url or '/reel/' in clean_url
             is_profile = any(pattern in clean_url for pattern in profile_patterns)
-            return is_profile and not is_single_video
+            return is_profile
         
         # Twitter profile patterns
         elif 'twitter.com' in clean_url or 'x.com' in clean_url:
@@ -2189,7 +3653,10 @@ class VideoDownloader:
             # Special handling for Facebook - use custom extractor
             if platform == 'Facebook' and FACEBOOK_HELPER_AVAILABLE:
                 print(f"Using Facebook helper for: {profile_url}")
-                result = get_facebook_profile_videos(profile_url, max_videos, callback=print)
+                # Fetch 3x more videos to account for high failure rate on Facebook
+                # Many Facebook video IDs are invalid, private, or require login
+                fetch_count = int(max_videos * 3) if max_videos else 500
+                result = get_facebook_profile_videos(profile_url, fetch_count, callback=print)
                 
                 if result['success'] and result['videos']:
                     videos = []
@@ -2247,11 +3714,9 @@ class VideoDownloader:
                     'playlistreverse': False,  # Get newest first
                 })
             elif platform == 'Facebook':
-                # Facebook-specific options - try to use cookies from browser
-                opts.update({
-                    'cookiesfrombrowser': ('chrome',),  # Try Chrome cookies first
-                })
-                # Also try without extract_flat for Facebook
+                # Facebook-specific options
+                # Note: Don't use cookiesfrombrowser - causes errors when browser is open
+                # The Facebook helper handles extraction without needing cookies
                 opts['extract_flat'] = 'in_playlist'
             
             print(f"Extracting videos from {platform} profile: {profile_url}")
@@ -2269,25 +3734,51 @@ class VideoDownloader:
                 # Handle different types of results
                 videos = []
                 
-                if 'entries' in info:
-                    print(f"Found {len(info['entries'])} entries")
-                    # Playlist/channel with multiple videos
-                    for i, entry in enumerate(info['entries']):
-                        if entry and entry.get('url'):
+                def extract_videos_from_entries(entries, depth=0):
+                    """Recursively extract videos from nested entries"""
+                    extracted = []
+                    for i, entry in enumerate(entries):
+                        if entry is None:
+                            continue
+                        
+                        # Check if this entry has nested entries (like YouTube tabs)
+                        if 'entries' in entry and entry['entries']:
+                            print(f"{'  '*depth}Found nested playlist: {entry.get('title', 'Unknown')} with {len(entry['entries'])} items")
+                            nested = extract_videos_from_entries(entry['entries'], depth + 1)
+                            extracted.extend(nested)
+                        elif entry.get('url') or entry.get('webpage_url'):
+                            # This is an actual video
+                            url = entry.get('url') or entry.get('webpage_url')
                             video_info = {
-                                'url': entry['url'],
+                                'url': url,
                                 'title': entry.get('title', f'Video {i+1}'),
                                 'id': entry.get('id', ''),
                                 'duration': entry.get('duration', 0),
-                                'uploader': info.get('uploader', entry.get('uploader', 'Unknown')),
+                                'uploader': entry.get('uploader', info.get('uploader', 'Unknown')),
                                 'upload_date': entry.get('upload_date', ''),
                                 'view_count': entry.get('view_count', 0)
                             }
-                            videos.append(video_info)
-                        elif entry is None:
-                            print(f"Skipping None entry at index {i}")
-                        else:
-                            print(f"Skipping entry without URL at index {i}: {entry.get('title', 'No title')}")
+                            extracted.append(video_info)
+                        elif entry.get('id'):
+                            # Has ID but no URL - construct YouTube URL
+                            video_id = entry.get('id')
+                            if platform == 'YouTube' and video_id:
+                                url = f'https://www.youtube.com/watch?v={video_id}'
+                                video_info = {
+                                    'url': url,
+                                    'title': entry.get('title', f'Video {i+1}'),
+                                    'id': video_id,
+                                    'duration': entry.get('duration', 0),
+                                    'uploader': entry.get('uploader', info.get('uploader', 'Unknown')),
+                                    'upload_date': entry.get('upload_date', ''),
+                                    'view_count': entry.get('view_count', 0)
+                                }
+                                extracted.append(video_info)
+                    return extracted
+                
+                if 'entries' in info:
+                    print(f"Found {len(info['entries'])} top-level entries")
+                    videos = extract_videos_from_entries(info['entries'])
                 
                 elif info.get('url'):
                     print("Single video found (unusual for profile)")
@@ -2305,6 +3796,10 @@ class VideoDownloader:
                 else:
                     print("No entries or URL found in info")
                     print(f"Available keys: {list(info.keys())}")
+                
+                # Limit to max_videos if specified
+                if max_videos and len(videos) > max_videos:
+                    videos = videos[:max_videos]
                 
                 print(f"Successfully extracted {len(videos)} videos")
                 
@@ -2341,8 +3836,8 @@ class VideoDownloader:
         if 'facebook.com/people/' in url and 'pfbid' in url:
             return False, ("This appears to be a Facebook profile URL. "
                           "Please use direct video post URLs instead:\n"
-                          "• facebook.com/watch/?v=VIDEO_ID\n"
-                          "• facebook.com/USERNAME/videos/VIDEO_ID")
+                          "- facebook.com/watch/?v=VIDEO_ID\n"
+                          "- facebook.com/USERNAME/videos/VIDEO_ID")
         
         if 'facebook.com/share/' in url:
             return False, ("This is a Facebook share URL. "
@@ -2376,6 +3871,31 @@ class VideoDownloader:
         
         elif 'age' in error_lower and 'restrict' in error_lower:
             return "This video is age-restricted and cannot be accessed."
+        
+        # Permission and file access errors
+        elif 'permission denied' in error_lower or 'errno 13' in error_lower:
+            return "File access denied. Close File Explorer and try again, or check antivirus settings."
+        
+        elif 'winerror 10054' in error_lower or 'connection was forcibly closed' in error_lower:
+            return "Connection interrupted by server. The download will retry automatically."
+        
+        elif 'connection' in error_lower and ('reset' in error_lower or 'refused' in error_lower):
+            return "Connection failed. Check your internet connection and try again."
+        
+        elif 'timeout' in error_lower:
+            return "Connection timed out. The server may be slow or your connection unstable."
+        
+        # JavaScript runtime warning (not an error, but informational)
+        elif 'javascript runtime' in error_lower or 'js runtime' in error_lower:
+            return "Some video formats unavailable (JS runtime not installed). Download will continue with available formats."
+        
+        # SABR streaming (YouTube specific)
+        elif 'sabr streaming' in error_lower:
+            return "YouTube is using new streaming format. Download will continue with available formats."
+        
+        # Rate limiting
+        elif 'rate limit' in error_lower or 'too many requests' in error_lower:
+            return "Too many requests. Please wait a moment before trying again."
         
         # Return cleaned original message if no specific case matches
         return error_msg
@@ -2448,9 +3968,15 @@ class VideoDownloader:
         
         return filename
 
-    def download(self, url, quality='best', audio_only=False, subtitle=False, format_pref='Force H.264 (Compatible)', force_convert=False, use_caption=True, mute_video=False, callback=None):
+    def download(self, url, quality='best', audio_only=False, subtitle=False, format_pref='Force H.264 (Compatible)', force_convert=False, use_caption=True, mute_video=False, callback=None, retry_count=0):
+        """Download video with professional error handling and automatic recovery"""
+        MAX_RETRIES = 3
+        
         # Reset abort flag at start of each download
         self.abort_download = False
+        
+        # Clean up any leftover temp files before starting
+        self.cleanup_temp_files()
         
         # Detect platform to use appropriate filename template
         platform = self.detect_platform(url)
@@ -2463,11 +3989,22 @@ class VideoDownloader:
         
         opts = {
             'outtmpl': safe_template,
-            'retries': 3,
+            'retries': 5,                # Increased retries
+            'fragment_retries': 10,      # More fragment retries for HLS streams
+            'file_access_retries': 5,    # Retry on file access errors
+            'skip_unavailable_fragments': True,  # Skip bad fragments instead of failing
             'restrictfilenames': False,  # Keep spaces, don't replace with _
             'windowsfilenames': True,    # Make filenames Windows-compatible
             'trim_file_name': 210,       # Allow longer filenames (max 210 for Windows)
+            'noprogress': False,         # Show progress
+            'continuedl': True,          # Continue partial downloads
+            'nopart': False,             # Use .part files for resumable downloads
+            'buffersize': 1024 * 16,     # 16KB buffer for smoother downloads
+            'http_chunk_size': 10485760, # 10MB chunks for better reliability
         }
+        
+        # Note: Don't use cookiesfrombrowser here - it causes errors when browser is open
+        # The direct Facebook downloader handles cookies separately
         
         # Add mute video postprocessor (removes audio track)
         if mute_video and not audio_only:
@@ -2488,16 +4025,42 @@ class VideoDownloader:
             if original_callback:
                 original_callback(msg)
         
+        # Track permission errors for smart retry
+        permission_error_count = [0]
+        last_filename = [None]
+        
         if callback:
             def hook(d):
                 # Check abort flag on every progress update
                 if self.abort_download:
                     raise Exception("Download aborted by user")
-                if d['status'] == 'downloading' and 'total_bytes' in d:
-                    pct = d['downloaded_bytes'] / d['total_bytes'] * 100
-                    abort_aware_callback(f"Downloading: {pct:.1f}%")
+                
+                # Track the filename for cleanup
+                if 'filename' in d:
+                    last_filename[0] = d['filename']
+                
+                if d['status'] == 'downloading':
+                    if 'total_bytes' in d:
+                        pct = d['downloaded_bytes'] / d['total_bytes'] * 100
+                        speed = d.get('speed', 0)
+                        speed_str = f" @ {speed/1024/1024:.1f}MB/s" if speed else ""
+                        abort_aware_callback(f"Downloading: {pct:.1f}%{speed_str}")
+                    elif 'total_bytes_estimate' in d:
+                        pct = d['downloaded_bytes'] / d['total_bytes_estimate'] * 100
+                        abort_aware_callback(f"Downloading: {pct:.1f}% (estimated)")
+                    elif 'fragment_index' in d and 'fragment_count' in d:
+                        # HLS/fragmented download progress
+                        frag_pct = d['fragment_index'] / d['fragment_count'] * 100
+                        abort_aware_callback(f"Downloading: {frag_pct:.1f}% (fragment {d['fragment_index']}/{d['fragment_count']})")
                 elif d['status'] == 'finished':
-                    abort_aware_callback(f"✓ Completed: {d['filename']}")
+                    abort_aware_callback(f"Completed: {Path(d['filename']).name}")
+                elif d['status'] == 'error':
+                    # Handle errors in progress hook
+                    error_msg = d.get('error', 'Unknown error')
+                    if 'permission denied' in str(error_msg).lower():
+                        permission_error_count[0] += 1
+                        if last_filename[0]:
+                            self.cleanup_temp_files(last_filename[0])
             opts['progress_hooks'] = [hook]
         
         # For TikTok, first get info and clean the description, then download
@@ -2522,6 +4085,21 @@ class VideoDownloader:
             except:
                 pass  # Fall back to default template
         
+        # Helper function to convert quality string to height
+        def get_height_from_quality(q):
+            quality_map = {
+                '8K': '4320',
+                '4K': '2160',
+                '2K': '1440',
+                '1080p': '1080',
+                '720p': '720',
+                '480p': '480',
+                '360p': '360',
+                '240p': '240',
+                '144p': '144'
+            }
+            return quality_map.get(q, q[:-1] if q.endswith('p') else q)
+        
         if audio_only:
             opts['format'] = 'bestaudio/best'
             opts['postprocessors'] = [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3'}]
@@ -2536,21 +4114,38 @@ class VideoDownloader:
                     if quality == 'best':
                         opts['format'] = 'best[vcodec*=avc1]/best[vcodec*=h264]/best[format_id*=download]/best[format_id!*=bytevc1]/best'
                     else:
-                        height = quality[:-1]
+                        height = get_height_from_quality(quality)
                         opts['format'] = f'best[vcodec*=avc1][height<={height}]/best[vcodec*=h264][height<={height}]/best[format_id*=download][height<={height}]/best[format_id!*=bytevc1][height<={height}]/best[height<={height}]'
                 elif 'Facebook' in platform:
-                    # Facebook-specific format selection - more permissive
+                    # Facebook-specific format selection - use format IDs that Facebook provides
                     if quality == 'best':
-                        opts['format'] = 'best[ext=mp4]/best'
+                        # Facebook uses 'hd' and 'sd' format IDs, try those first
+                        opts['format'] = 'hd/sd/best[ext=mp4]/best'
                     else:
-                        height = quality[:-1]
-                        opts['format'] = f'best[ext=mp4][height<={height}]/best[height<={height}]'
+                        height = get_height_from_quality(quality)
+                        # For quality selection, still try hd/sd first as fallback
+                        opts['format'] = f'best[ext=mp4][height<={height}]/best[height<={height}]/hd/sd/best'
+                elif 'YouTube' in platform:
+                    # YouTube-specific format selection to handle SABR streaming
+                    # Prefer formats that don't require JS runtime
+                    if quality == 'best':
+                        opts['format'] = 'best[vcodec*=avc1]/best[vcodec*=h264]/bestvideo[vcodec*=avc1]+bestaudio/best'
+                    else:
+                        height = get_height_from_quality(quality)
+                        opts['format'] = f'best[vcodec*=avc1][height<={height}]/best[vcodec*=h264][height<={height}]/bestvideo[vcodec*=avc1][height<={height}]+bestaudio/best[height<={height}]'
+                    
+                    # Add YouTube-specific extractor args to improve reliability
+                    opts['extractor_args'] = opts.get('extractor_args', {})
+                    opts['extractor_args']['youtube'] = {
+                        'player_client': ['android', 'web'],  # Use multiple clients for better format availability
+                        'skip': ['dash', 'hls'],  # Skip problematic formats when possible
+                    }
                 else:
                     # General format selection for other platforms
                     if quality == 'best':
                         opts['format'] = 'best[vcodec*=avc1]/best[vcodec*=h264]/best[ext=mp4]/best'
                     else:
-                        height = quality[:-1]
+                        height = get_height_from_quality(quality)
                         opts['format'] = f'best[vcodec*=avc1][height<={height}]/best[vcodec*=h264][height<={height}]/best[ext=mp4][height<={height}]/best[height<={height}]'
                 
                 # Add post-processor to convert to H.264 if HEVC is still downloaded
@@ -2564,15 +4159,15 @@ class VideoDownloader:
                             'preferedformat': 'mp4',
                         }]
                         if callback:
-                            callback("🔧 FFmpeg available - will convert if needed")
+                            callback("[*] FFmpeg available - will convert if needed")
                     except (subprocess.CalledProcessError, FileNotFoundError):
                         if callback:
-                            callback("⚠ FFmpeg not found - downloading best available format")
+                            callback("[!] FFmpeg not found - downloading best available format")
                         # Don't add post-processor if FFmpeg is not available
                 
             elif format_pref == 'Convert to H.264':
                 # Download any format but convert to H.264 (only if FFmpeg available)
-                opts['format'] = 'best' if quality == 'best' else f'best[height<={quality[:-1]}]'
+                opts['format'] = 'best' if quality == 'best' else f'best[height<={get_height_from_quality(quality)}]'
                 try:
                     import subprocess
                     subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True)
@@ -2581,23 +4176,25 @@ class VideoDownloader:
                         'preferedformat': 'mp4',
                     }]
                     if callback:
-                        callback("🔧 Will convert to H.264 using FFmpeg")
+                        callback("[*] Will convert to H.264 using FFmpeg")
                 except (subprocess.CalledProcessError, FileNotFoundError):
                     if callback:
-                        callback("⚠ FFmpeg not found - downloading without conversion")
+                        callback("[!] FFmpeg not found - downloading without conversion")
                 
             elif format_pref == 'mp4 (H.264)':
                 # Try to get H.264 but don't convert
                 if quality == 'best':
                     opts['format'] = 'best[ext=mp4][vcodec*=avc1]/best[ext=mp4][vcodec*=h264]/best[ext=mp4]/best'
                 else:
-                    height = quality[:-1]
+                    height = get_height_from_quality(quality)
                     opts['format'] = f'best[ext=mp4][vcodec*=avc1][height<={height}]/best[ext=mp4][vcodec*=h264][height<={height}]/best[ext=mp4][height<={height}]/best[height<={height}]'
                     
             elif format_pref == 'webm':
-                opts['format'] = 'best[ext=webm]/best' if quality == 'best' else f'best[ext=webm][height<={quality[:-1]}]/best[height<={quality[:-1]}]'
+                height = get_height_from_quality(quality)
+                opts['format'] = 'best[ext=webm]/best' if quality == 'best' else f'best[ext=webm][height<={height}]/best[height<={height}]'
             else:  # 'any'
-                opts['format'] = 'best' if quality == 'best' else f'best[height<={quality[:-1]}]'
+                height = get_height_from_quality(quality)
+                opts['format'] = 'best' if quality == 'best' else f'best[height<={height}]'
         
         if subtitle:
             opts['writesubtitles'] = True
@@ -2635,11 +4232,17 @@ class VideoDownloader:
             except Exception as format_error:
                 # If format selection fails, try with simpler format
                 if callback:
-                    callback("⚠ Format selection failed, trying simpler format...")
+                    callback("[!] Format selection failed, trying simpler format...")
                 
                 # Create simpler options
                 simple_opts = opts.copy()
-                simple_opts['format'] = 'best'  # Just get the best available format
+                
+                # For Facebook, try hd/sd format IDs first, then fall back to best
+                platform = self.detect_platform(url)
+                if 'Facebook' in platform:
+                    simple_opts['format'] = 'hd/sd/best'
+                else:
+                    simple_opts['format'] = 'best'  # Just get the best available format
                 
                 with yt_dlp.YoutubeDL(simple_opts) as ydl:
                     info = ydl.extract_info(url, download=False)
@@ -2662,9 +4265,78 @@ class VideoDownloader:
             return {'success': True, 'file_path': downloaded_file}
             
         except Exception as e:
+            error_str = str(e).lower()
+            
+            # Clean up temp files after error
+            if last_filename[0]:
+                self.cleanup_temp_files(last_filename[0])
+            
+            # Handle permission denied errors with smart retry
+            if 'permission denied' in error_str or 'errno 13' in error_str:
+                if retry_count < MAX_RETRIES:
+                    if callback:
+                        callback(f"[!] File access error, cleaning up and retrying ({retry_count + 1}/{MAX_RETRIES})...")
+                    
+                    # Clean up all temp files
+                    self.cleanup_temp_files()
+                    
+                    # Wait a moment for file handles to release
+                    import time
+                    time.sleep(2)
+                    
+                    # Retry the download
+                    return self.download(url, quality, audio_only, subtitle, format_pref, 
+                                        force_convert, use_caption, mute_video, callback, retry_count + 1)
+                else:
+                    if callback:
+                        callback("[X] File access error persists. Try:")
+                        callback("   - Close File Explorer in the download folder")
+                        callback("   - Add folder to antivirus exclusions")
+                        callback("   - Delete .ytdl and .part files manually")
+                    return {'success': False, 'error': 'Permission denied - file locked by another process'}
+            
+            # Handle connection errors with retry
+            if 'connection' in error_str or 'timeout' in error_str or 'winError 10054' in error_str.lower():
+                if retry_count < MAX_RETRIES:
+                    if callback:
+                        callback(f"[!] Connection error, retrying ({retry_count + 1}/{MAX_RETRIES})...")
+                    
+                    import time
+                    time.sleep(3 * (retry_count + 1))  # Exponential backoff
+                    
+                    return self.download(url, quality, audio_only, subtitle, format_pref,
+                                        force_convert, use_caption, mute_video, callback, retry_count + 1)
+            
+            # For Facebook errors, always try direct download as fallback
+            platform = self.detect_platform(url)
+            if 'Facebook' in platform and try_direct_facebook_download:
+                if callback:
+                    callback("[!] yt-dlp failed, trying direct Facebook download...")
+                
+                # Try direct download method
+                try:
+                    direct_result = try_direct_facebook_download(
+                        url, 
+                        str(self.output_dir), 
+                        callback=callback
+                    )
+                    if direct_result['success']:
+                        return {'success': True, 'file_path': Path(direct_result['file_path'])}
+                    else:
+                        if callback:
+                            callback(f"[!] Direct download also failed: {direct_result['error']}")
+                except Exception as direct_error:
+                    if callback:
+                        callback(f"[!] Direct download error: {direct_error}")
+            
+            # Final cleanup
+            self.cleanup_temp_files()
+            
+            # Provide user-friendly error message
+            friendly_error = self.get_user_friendly_error(str(e), url)
             if callback:
-                callback(f"✗ Error: {e}")
-            return {'success': False, 'error': str(e)}
+                callback(f"[X] Error: {friendly_error}")
+            return {'success': False, 'error': friendly_error}
 
 
 class Worker(QThread):
@@ -2689,7 +4361,7 @@ class Worker(QThread):
                 
             if self.opts.get('op') == 'info':
                 self.progress_percent.emit(10, "Connecting...")
-                self.progress.emit("🔍 Getting video information...")
+                self.progress.emit("[?] Getting video information...")
                 
                 self.progress_percent.emit(30, "Extracting info...")
                 data = self.dl.get_info(self.url)
@@ -2702,7 +4374,7 @@ class Worker(QThread):
                 elif data and data.get('error'):
                     error_msg = data.get('message', 'Unknown error')
                     self.progress_percent.emit(100, "Failed")
-                    self.progress.emit(f"❌ Error: {error_msg}")
+                    self.progress.emit(f"[X] Error: {error_msg}")
                     self.done.emit(False, f"Failed to get info: {error_msg}", "")
                 else:
                     self.progress_percent.emit(100, "Failed")
@@ -2740,11 +4412,11 @@ class Worker(QThread):
                 if result['success']:
                     self.progress_percent.emit(100, "Complete")
                     file_path = str(result['file_path']) if result['file_path'] else ""
-                    self.progress.emit(f"🔍 Worker: success=True, file_path='{file_path}'")
+                    self.progress.emit(f"[?] Worker: success=True, file_path='{file_path}'")
                     self.done.emit(True, "Download complete", file_path)
                 else:
                     self.progress_percent.emit(100, "Failed")
-                    self.progress.emit(f"🔍 Worker: success=False, error='{result.get('error', 'Unknown error')}'")
+                    self.progress.emit(f"[?] Worker: success=False, error='{result.get('error', 'Unknown error')}'")
                     self.done.emit(False, f"Download failed: {result.get('error', 'Unknown error')}", "")
                     
         except Exception as e:
@@ -2752,7 +4424,8 @@ class Worker(QThread):
 
 
 class MainWindow(QMainWindow):
-    VERSION = "1.1.0"
+    VERSION = "1.1.8"
+    APP_ID = None  # Unique installation ID
     
     def __init__(self):
         super().__init__()
@@ -2764,6 +4437,9 @@ class MainWindow(QMainWindow):
         # Initialize settings for persistence
         self.settings = QSettings("VideoDownloader", "VideoDownloaderPro")
         
+        # Generate or load unique App ID for this installation
+        self.app_id = self.get_or_create_app_id()
+        
         self.setup_ui()
         self.load_settings()  # Load saved settings after UI setup
         
@@ -2773,6 +4449,9 @@ class MainWindow(QMainWindow):
         # Check for FFmpeg and show info
         QTimer.singleShot(500, self.check_ffmpeg)
         
+        # Check for updates
+        QTimer.singleShot(2000, self.check_for_updates)
+        
         # Clean up any old log persistence and show welcome message
         QTimer.singleShot(1000, self.setup_fresh_log)
         
@@ -2780,6 +4459,64 @@ class MainWindow(QMainWindow):
         self.auto_save_timer = QTimer()
         self.auto_save_timer.timeout.connect(self.periodic_save)
         self.auto_save_timer.start(30000)  # 30 seconds
+    
+    def update_license_display(self):
+        """Update the license info display in title bar"""
+        try:
+            if LICENSE_CLIENT_AVAILABLE:
+                client = get_license_client()
+                if client.is_valid() and client.license_key:
+                    key_short = client.license_key[:4] + "..." + client.license_key[-4:]
+                    days = client.get_days_remaining()
+                    
+                    if days is None:
+                        days_text = "Lifetime"
+                        color = "#22c55e"  # Green for lifetime
+                    elif days > 30:
+                        days_text = f"{days} days"
+                        color = "#22c55e"  # Green
+                    elif days > 7:
+                        days_text = f"{days} days"
+                        color = "#f59e0b"  # Orange/yellow warning
+                    elif days > 0:
+                        days_text = f"{days} days"
+                        color = "#ef4444"  # Red urgent
+                    else:
+                        days_text = "Expired"
+                        color = "#ef4444"
+                    
+                    self.license_info_label.setText(f"🔑 {key_short} • {days_text}")
+                    self.license_info_label.setStyleSheet(f"color: {color}; border: 0px; background: none; outline: 0px; margin-right: 15px;")
+                else:
+                    self.license_info_label.setText("🔑 No License")
+                    self.license_info_label.setStyleSheet("color: #6b7280; border: 0px; background: none; outline: 0px; margin-right: 15px;")
+            else:
+                self.license_info_label.setText("")
+        except Exception as e:
+            self.license_info_label.setText("")
+    
+    def get_or_create_app_id(self):
+        """Get existing App ID or create a new unique one for this installation"""
+        import uuid
+        
+        # Try to load existing App ID
+        app_id = self.settings.value("app_id", None)
+        
+        if not app_id:
+            # Generate new unique App ID
+            app_id = str(uuid.uuid4()).upper()[:8]  # Short 8-char ID like "A1B2C3D4"
+            self.settings.setValue("app_id", app_id)
+            self.settings.sync()
+        
+        return app_id
+    
+    def get_app_info(self):
+        """Get app info including App ID for display/management"""
+        return {
+            "app_id": self.app_id,
+            "version": self.VERSION,
+            "machine_id": get_license_client().machine_hash[:12] if LICENSE_CLIENT_AVAILABLE else "N/A"
+        }
     
     def setup_fresh_log(self):
         """Ensure log and multiple download text areas start completely fresh"""
@@ -2803,7 +4540,7 @@ class MainWindow(QMainWindow):
         
         if removed_any:
             self.settings.sync()
-            self.log("🧹 Removed old text content persistence - all text areas starting fresh")
+            self.log("[~] Removed old text content persistence - all text areas starting fresh")
         
         # Show welcome message
         self.show_welcome_message()
@@ -2812,9 +4549,9 @@ class MainWindow(QMainWindow):
         all_keys = self.settings.allKeys()
         text_related_keys = [key for key in all_keys if any(word in key.lower() for word in ['log', 'info', 'progress', 'content'])]
         if text_related_keys:
-            self.log(f"🔍 Debug: Found text-related settings keys: {text_related_keys}")
+            self.log(f"[?] Debug: Found text-related settings keys: {text_related_keys}")
         else:
-            self.log("✅ Confirmed: No text content settings found - all text areas will start fresh")
+            self.log("[OK] Confirmed: No text content settings found - all text areas will start fresh")
 
     def update_download_status(self, status, color="#58a6ff"):
         """Update the single download status label"""
@@ -2825,15 +4562,15 @@ class MainWindow(QMainWindow):
     def clear_log(self):
         """Clear log and show a fresh start message"""
         self.log_text.clear()
-        self.log("📝 Log cleared - Ready for new operations")
+        self.log("[N] Log cleared - Ready for new operations")
 
     def show_welcome_message(self):
         """Show welcome message in log since it doesn't persist"""
-        self.log(f"🎬 VIDT - Video Downloader Tool v{self.VERSION} - Ready!")
-        self.log("💡 Tip: Use the Help button (❓) in Multiple Download tab for URL format guidance")
-        self.log("📋 Paste video URLs and click 'Get Info' to check compatibility")
-        self.log("⚙️ All your settings and URLs are automatically saved")
-        self.log("─" * 50)
+        self.log(f"[V] VIDT - Video Downloader Tool v{self.VERSION} - Ready!")
+        self.log("[*] Tip: Use the Help button ([?]) in Multiple Download tab for URL format guidance")
+        self.log("[L] Paste video URLs and click 'Get Info' to check compatibility")
+        self.log("[S] All your settings and URLs are automatically saved")
+        self.log("-" * 50)
 
     def check_ffmpeg(self):
         """Check if FFmpeg is available and provide guidance"""
@@ -2841,29 +4578,262 @@ class MainWindow(QMainWindow):
         try:
             # Try to run ffmpeg to check if it's available
             subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True)
-            self.log("✅ FFmpeg is available - full format conversion supported")
+            self.log("[OK] FFmpeg is available - full format conversion supported")
         except (subprocess.CalledProcessError, FileNotFoundError):
-            self.log("⚠ FFmpeg not found - some format conversions may not work")
-            self.log("💡 To install FFmpeg:")
+            self.log("[!] FFmpeg not found - some format conversions may not work")
+            self.log("[*] To install FFmpeg:")
             self.log("   1. Download from: https://ffmpeg.org/download.html")
             self.log("   2. Or use: winget install ffmpeg (Windows)")
             self.log("   3. Add to PATH environment variable")
+
+    def check_for_updates(self):
+        """Check for new version from GitHub"""
+        self.log("[~] Checking for updates...")
+        
+        try:
+            import requests
+            
+            # Fetch version.json from GitHub raw
+            url = "https://raw.githubusercontent.com/phattra-dev/vidttool/main/version.json"
+            response = requests.get(url, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                latest_version = data.get('version', '0.0.0')
+                
+                # Compare versions
+                def version_tuple(v):
+                    try:
+                        return tuple(map(int, v.split('.')))
+                    except:
+                        return (0, 0, 0)
+                
+                current = version_tuple(self.VERSION)
+                latest = version_tuple(latest_version)
+                
+                if latest > current:
+                    # New version available
+                    self.log(f"[!] Update available: v{latest_version}")
+                    changelog = data.get('changelog', [])
+                    download_url = data.get('download_url', '')
+                    self.show_update_dialog(latest_version, changelog, download_url)
+                else:
+                    self.log(f"[OK] You have the latest version (v{self.VERSION})")
+            else:
+                self.log(f"[!] Update check failed: HTTP {response.status_code}")
+        except Exception as e:
+            self.log(f"[!] Update check failed: {e}")
+
+    def show_update_dialog(self, new_version, changelog, download_url):
+        """Show update available dialog with auto-update option"""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Update Available")
+        dialog.setFixedSize(500, 420)
+        dialog.setStyleSheet("""
+            QDialog {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 #1a1f2e, stop:1 #0d1117);
+                color: #e6edf3;
+            }
+            QLabel { color: #e6edf3; background: transparent; }
+            QProgressBar {
+                background: #21262d;
+                border: 1px solid #30363d;
+                border-radius: 6px;
+                height: 20px;
+                text-align: center;
+                color: white;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #238636, stop:1 #2ea043);
+                border-radius: 5px;
+            }
+            QPushButton {
+                background: #238636;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 12px 24px;
+                font-weight: bold;
+                font-size: 13px;
+            }
+            QPushButton:hover { background: #2ea043; }
+            QPushButton:disabled { background: #21262d; color: #484f58; }
+            QPushButton#later {
+                background: transparent;
+                border: 1px solid #444c56;
+                color: #8b949e;
+            }
+            QPushButton#later:hover { border-color: #58a6ff; color: #e6edf3; }
+        """)
+        
+        layout = QVBoxLayout(dialog)
+        layout.setSpacing(16)
+        layout.setContentsMargins(30, 30, 30, 30)
+        
+        # Header
+        header = QLabel(f"🚀 New Version Available!")
+        header.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
+        header.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(header)
+        
+        # Version info
+        version_info = QLabel(f"v{self.VERSION} → v{new_version}")
+        version_info.setFont(QFont("Segoe UI", 14))
+        version_info.setStyleSheet("color: #58a6ff;")
+        version_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(version_info)
+        
+        # Changelog
+        changelog_label = QLabel("What's New:")
+        changelog_label.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        layout.addWidget(changelog_label)
+        
+        changelog_text = QTextEdit()
+        changelog_text.setReadOnly(True)
+        changelog_text.setStyleSheet("""
+            QTextEdit {
+                background: rgba(45,51,59,0.5);
+                border: 1px solid #30363d;
+                border-radius: 8px;
+                padding: 10px;
+                color: #8b949e;
+                font-size: 12px;
+            }
+        """)
+        changelog_text.setPlainText("\n".join([f"• {item}" for item in changelog[:8]]))
+        changelog_text.setMaximumHeight(120)
+        layout.addWidget(changelog_text)
+        
+        # Progress bar (hidden initially)
+        progress_bar = QProgressBar()
+        progress_bar.setVisible(False)
+        progress_bar.setFormat("%p% - Downloading update...")
+        layout.addWidget(progress_bar)
+        
+        # Status label
+        status_label = QLabel("")
+        status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        status_label.setStyleSheet("color: #8b949e; font-size: 12px;")
+        layout.addWidget(status_label)
+        
+        layout.addStretch()
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(12)
+        
+        later_btn = QPushButton("Remind Me Later")
+        later_btn.setObjectName("later")
+        later_btn.clicked.connect(dialog.reject)
+        btn_layout.addWidget(later_btn)
+        
+        update_btn = QPushButton("⬇ Update Now")
+        btn_layout.addWidget(update_btn)
+        
+        layout.addLayout(btn_layout)
+        
+        # Store references for the update function
+        dialog.progress_bar = progress_bar
+        dialog.status_label = status_label
+        dialog.update_btn = update_btn
+        dialog.later_btn = later_btn
+        dialog.download_url = download_url
+        dialog.new_version = new_version
+        
+        def start_update():
+            self.download_and_install_update(dialog)
+        
+        update_btn.clicked.connect(start_update)
+        dialog.exec()
+
+    def download_and_install_update(self, dialog):
+        """Download update and install it automatically"""
+        import requests
+        import tempfile
+        import subprocess
+        
+        dialog.update_btn.setEnabled(False)
+        dialog.later_btn.setEnabled(False)
+        dialog.progress_bar.setVisible(True)
+        dialog.progress_bar.setValue(0)
+        dialog.status_label.setText("Preparing download...")
+        QApplication.processEvents()
+        
+        try:
+            # Download the installer
+            response = requests.get(dialog.download_url, stream=True, timeout=60)
+            response.raise_for_status()
+            
+            total_size = int(response.headers.get('content-length', 0))
+            downloaded = 0
+            
+            # Save to temp directory
+            temp_dir = Path(tempfile.gettempdir())
+            installer_path = temp_dir / f"VIDT_Setup_{dialog.new_version}.exe"
+            
+            dialog.status_label.setText(f"Downloading... (0 / {total_size // 1024 // 1024} MB)")
+            QApplication.processEvents()
+            
+            with open(installer_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total_size > 0:
+                            progress = int((downloaded / total_size) * 100)
+                            dialog.progress_bar.setValue(progress)
+                            dialog.status_label.setText(f"Downloading... ({downloaded // 1024 // 1024} / {total_size // 1024 // 1024} MB)")
+                            QApplication.processEvents()
+            
+            dialog.progress_bar.setValue(100)
+            dialog.status_label.setText("Download complete! Starting installer...")
+            QApplication.processEvents()
+            
+            # Log success
+            self.log(f"[OK] Update downloaded to: {installer_path}")
+            
+            # Run the installer silently and close current app
+            QTimer.singleShot(1000, lambda: self.run_installer_and_exit(installer_path))
+            
+        except Exception as e:
+            dialog.status_label.setText(f"Download failed: {str(e)[:50]}")
+            dialog.status_label.setStyleSheet("color: #f85149; font-size: 12px;")
+            dialog.update_btn.setEnabled(True)
+            dialog.later_btn.setEnabled(True)
+            dialog.progress_bar.setVisible(False)
+            self.log(f"[X] Update download failed: {e}")
+
+    def run_installer_and_exit(self, installer_path):
+        """Run the installer and exit the current application"""
+        import subprocess
+        
+        try:
+            # Start the installer
+            subprocess.Popen([str(installer_path)], shell=True)
+            self.log("[OK] Installer started, closing application...")
+            
+            # Close the application
+            QApplication.quit()
+        except Exception as e:
+            self.log(f"[X] Failed to start installer: {e}")
 
     def retry_set_directory(self):
         """Retry setting the output directory after UI is fully loaded"""
         try:
             stored_dir = self.settings.value("output_directory", "downloads")
             if stored_dir and stored_dir != "downloads":
-                self.log(f"🔄 Retrying to set directory: '{stored_dir}'")
+                self.log(f"[R] Retrying to set directory: '{stored_dir}'")
                 self._loading_settings = True  # Prevent auto-save during retry
                 self.output.setText(stored_dir)
                 self._loading_settings = False  # Re-enable auto-save
                 self.dl.output_dir = Path(stored_dir)
                 # Verify it worked this time
                 actual_text = self.output.text()
-                self.log(f"🔄 After retry, output field shows: '{actual_text}'")
+                self.log(f"[R] After retry, output field shows: '{actual_text}'")
         except Exception as e:
-            self.log(f"⚠ Retry failed: {e}")
+            self.log(f"[!] Retry failed: {e}")
             self._loading_settings = False  # Ensure flag is reset
         
         # Also retry loading multiple download URLs after UI is ready
@@ -2881,12 +4851,12 @@ class MainWindow(QMainWindow):
                     added_count, invalid_count = self.url_list_widget.add_urls_from_text(urls_text)
                     self._loading_settings = False  # Re-enable auto-save
                     if added_count > 0:
-                        self.log(f"🔄 Successfully restored {added_count} URLs from previous session")
+                        self.log(f"[R] Successfully restored {added_count} URLs from previous session")
                         # Update the URL status after loading
                         if hasattr(self, 'update_url_status'):
                             self.update_url_status()
         except Exception as e:
-            self.log(f"⚠ Failed to restore URLs: {e}")
+            self.log(f"[!] Failed to restore URLs: {e}")
             self._loading_settings = False  # Ensure flag is reset
 
     def setup_ui(self):
@@ -2948,11 +4918,15 @@ class MainWindow(QMainWindow):
         self.single_tab = self.create_single_download_tab()
         self.multiple_tab = self.create_multiple_download_tab()
         self.profile_tab = self.create_profile_download_tab()
+        self.image_tab = self.create_image_download_tab()
+        self.edit_tab = self.create_edit_videos_tab()
         
         # Add tabs to widget
         self.tab_widget.addTab(self.single_tab, "Single Download")
         self.tab_widget.addTab(self.multiple_tab, "Multiple Download")
         self.tab_widget.addTab(self.profile_tab, "Profile Video Download")
+        self.tab_widget.addTab(self.image_tab, "Image Download")
+        self.tab_widget.addTab(self.edit_tab, "Edit Videos")
         
         # Connect tab change to auto-save
         self.tab_widget.currentChanged.connect(self.on_tab_changed)
@@ -3027,7 +5001,7 @@ class MainWindow(QMainWindow):
         self.info_btn.clicked.connect(self.get_info)
         self.style_btn_green(self.info_btn)
         
-        self.dl_btn = QPushButton("⬇  Download")
+        self.dl_btn = QPushButton("Download")
         self.dl_btn.setFixedHeight(38)
         self.dl_btn.setMinimumWidth(140)
         self.dl_btn.clicked.connect(self.download)
@@ -3053,7 +5027,7 @@ class MainWindow(QMainWindow):
         # Quality
         opt_grid.addWidget(self.create_label("Quality:"), 0, 0)
         self.quality = QComboBox()
-        self.quality.addItems(["best", "1080p", "720p", "480p"])
+        self.quality.addItems(["best", "8K", "4K", "2K", "1080p", "720p", "480p", "360p"])
         self.style_combo(self.quality)
         self.quality.currentTextChanged.connect(self.auto_save_settings)
         opt_grid.addWidget(self.quality, 0, 1)
@@ -3189,22 +5163,22 @@ class MainWindow(QMainWindow):
         url_btn_row = QHBoxLayout()
         url_btn_row.setSpacing(8)
         
-        paste_urls_btn = QPushButton("📋 Paste URLs")
+        paste_urls_btn = QPushButton("Paste URLs")
         paste_urls_btn.setFixedHeight(32)
         paste_urls_btn.clicked.connect(self.paste_multiple_urls)
         self.style_btn_secondary(paste_urls_btn)
         
-        select_all_btn = QPushButton("☑ Select All")
+        select_all_btn = QPushButton("Select All")
         select_all_btn.setFixedHeight(32)
         select_all_btn.clicked.connect(lambda: self.url_list_widget.select_all(True))
         self.style_btn_secondary(select_all_btn)
         
-        deselect_all_btn = QPushButton("☐ Deselect All")
+        deselect_all_btn = QPushButton("Deselect All")
         deselect_all_btn.setFixedHeight(32)
         deselect_all_btn.clicked.connect(lambda: self.url_list_widget.select_all(False))
         self.style_btn_secondary(deselect_all_btn)
         
-        clear_urls_btn = QPushButton("🗑 Clear All")
+        clear_urls_btn = QPushButton("Clear All")
         clear_urls_btn.setFixedHeight(32)
         clear_urls_btn.clicked.connect(self.clear_all_urls)
         self.style_btn_secondary(clear_urls_btn)
@@ -3214,7 +5188,7 @@ class MainWindow(QMainWindow):
         self.url_status_label.setStyleSheet("color: #7d8590; font-size: 11px; font-style: italic; border: none; background: transparent;")
         
         # Help button for URL formats
-        help_btn = QPushButton("❓ Help")
+        help_btn = QPushButton("Help")
         help_btn.setFixedHeight(32)
         help_btn.clicked.connect(self.show_url_help)
         self.style_btn_secondary(help_btn)
@@ -3225,19 +5199,19 @@ class MainWindow(QMainWindow):
         self.style_btn_green(self.multi_info_btn)
         
         # Download control buttons - positioned near Get Info
-        self.multi_pause_btn = QPushButton("⏸ Pause")
+        self.multi_pause_btn = QPushButton("Pause")
         self.multi_pause_btn.setFixedHeight(32)
         self.multi_pause_btn.clicked.connect(self.pause_multiple_downloads)
         self.multi_pause_btn.setEnabled(False)
         self.style_btn_secondary(self.multi_pause_btn)
         
-        self.multi_stop_btn = QPushButton("⏹ Stop")
+        self.multi_stop_btn = QPushButton("Stop")
         self.multi_stop_btn.setFixedHeight(32)
         self.multi_stop_btn.clicked.connect(self.stop_multiple_downloads)
         self.multi_stop_btn.setEnabled(False)
         self.style_btn_secondary(self.multi_stop_btn)
         
-        self.multi_download_btn = QPushButton("⬇ Start Downloads")
+        self.multi_download_btn = QPushButton("Start Downloads")
         self.multi_download_btn.setFixedHeight(32)
         self.multi_download_btn.setMinimumWidth(120)
         self.multi_download_btn.clicked.connect(self.start_multiple_downloads)
@@ -3270,7 +5244,7 @@ class MainWindow(QMainWindow):
         # Quality & Format
         multi_opt_grid.addWidget(self.create_label("Quality:"), 0, 0)
         self.multi_quality = QComboBox()
-        self.multi_quality.addItems(["best", "1080p", "720p", "480p"])
+        self.multi_quality.addItems(["best", "8K", "4K", "2K", "1080p", "720p", "480p", "360p"])
         self.multi_quality.setFixedHeight(32)
         self.style_combo(self.multi_quality)
         self.multi_quality.currentTextChanged.connect(self.auto_save_settings)
@@ -3384,22 +5358,22 @@ class MainWindow(QMainWindow):
         url_btn_row = QHBoxLayout()
         url_btn_row.setSpacing(8)
         
-        paste_urls_btn = QPushButton("📋 Paste URLs")
+        paste_urls_btn = QPushButton("Paste URLs")
         paste_urls_btn.setFixedHeight(32)
         paste_urls_btn.clicked.connect(self.paste_profile_urls)
         self.style_btn_secondary(paste_urls_btn)
         
-        select_all_btn = QPushButton("☑ Select All")
+        select_all_btn = QPushButton("Select All")
         select_all_btn.setFixedHeight(32)
         select_all_btn.clicked.connect(lambda: self.profile_url_list_widget.select_all(True))
         self.style_btn_secondary(select_all_btn)
         
-        deselect_all_btn = QPushButton("☐ Deselect All")
+        deselect_all_btn = QPushButton("Deselect All")
         deselect_all_btn.setFixedHeight(32)
         deselect_all_btn.clicked.connect(lambda: self.profile_url_list_widget.select_all(False))
         self.style_btn_secondary(deselect_all_btn)
         
-        clear_urls_btn = QPushButton("🗑 Clear All")
+        clear_urls_btn = QPushButton("Clear All")
         clear_urls_btn.setFixedHeight(32)
         clear_urls_btn.clicked.connect(lambda: (self.profile_url_list_widget.clear_all(), self.update_profile_url_status()))
         self.style_btn_secondary(clear_urls_btn)
@@ -3414,7 +5388,7 @@ class MainWindow(QMainWindow):
         self.profile_info_btn.clicked.connect(self.get_profile_info_from_tab)
         self.style_btn_green(self.profile_info_btn)
         
-        self.profile_download_btn = QPushButton("⬇ Download Videos")
+        self.profile_download_btn = QPushButton("Download Videos")
         self.profile_download_btn.setFixedHeight(32)
         self.profile_download_btn.setMinimumWidth(120)
         self.profile_download_btn.clicked.connect(self.download_profile_from_tab)
@@ -3445,7 +5419,7 @@ class MainWindow(QMainWindow):
         # Quality, Format, Max Videos in one row
         options_grid.addWidget(self.create_label("Quality:"), 0, 0)
         self.profile_quality = QComboBox()
-        self.profile_quality.addItems(["best", "1080p", "720p", "480p", "360p"])
+        self.profile_quality.addItems(["best", "8K", "4K", "2K", "1080p", "720p", "480p", "360p"])
         self.profile_quality.setFixedHeight(32)
         self.style_combo(self.profile_quality)
         self.profile_quality.currentTextChanged.connect(self.auto_save_settings)
@@ -3547,6 +5521,589 @@ class MainWindow(QMainWindow):
         
         return tab_widget
     
+    def create_image_download_tab(self):
+        """Create Image Download tab - matching other tabs style"""
+        tab_widget = QWidget()
+        layout = QVBoxLayout(tab_widget)
+        layout.setSpacing(12)
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+        # === URL INPUT SECTION ===
+        url_frame = self.create_section("Image URLs")
+        url_layout = QVBoxLayout()
+        url_layout.setSpacing(8)
+        
+        # URL list with checkboxes (same as other tabs)
+        self.image_url_list_widget = URLListWidget(self)
+        self.image_url_list_widget.placeholder_label.setText("Click 'Paste URLs' to add image links from clipboard")
+        url_layout.addWidget(self.image_url_list_widget)
+        
+        # URL management buttons row
+        url_btn_row = QHBoxLayout()
+        url_btn_row.setSpacing(8)
+        
+        paste_urls_btn = QPushButton("Paste URLs")
+        paste_urls_btn.setFixedHeight(32)
+        paste_urls_btn.clicked.connect(self.paste_image_urls)
+        self.style_btn_secondary(paste_urls_btn)
+        
+        select_all_btn = QPushButton("Select All")
+        select_all_btn.setFixedHeight(32)
+        select_all_btn.clicked.connect(lambda: self.image_url_list_widget.select_all(True))
+        self.style_btn_secondary(select_all_btn)
+        
+        deselect_all_btn = QPushButton("Deselect All")
+        deselect_all_btn.setFixedHeight(32)
+        deselect_all_btn.clicked.connect(lambda: self.image_url_list_widget.select_all(False))
+        self.style_btn_secondary(deselect_all_btn)
+        
+        clear_urls_btn = QPushButton("Clear All")
+        clear_urls_btn.setFixedHeight(32)
+        clear_urls_btn.clicked.connect(lambda: (self.image_url_list_widget.clear_all(), self.update_image_url_status()))
+        self.style_btn_secondary(clear_urls_btn)
+        
+        # URL status label
+        self.image_url_status = QLabel("No image URLs added")
+        self.image_url_status.setStyleSheet("color: #7d8590; font-size: 11px; font-style: italic; border: none; background: transparent;")
+        
+        # Download button
+        self.image_download_btn = QPushButton("Download Images")
+        self.image_download_btn.setFixedHeight(32)
+        self.image_download_btn.setMinimumWidth(120)
+        self.image_download_btn.clicked.connect(self.download_images)
+        self.style_btn_primary(self.image_download_btn)
+        
+        # Options button
+        options_btn = QPushButton("Options")
+        options_btn.setFixedHeight(32)
+        options_btn.setMinimumWidth(80)
+        options_btn.clicked.connect(self.show_image_options_dialog)
+        self.style_btn_secondary(options_btn)
+        
+        url_btn_row.addWidget(paste_urls_btn)
+        url_btn_row.addWidget(select_all_btn)
+        url_btn_row.addWidget(deselect_all_btn)
+        url_btn_row.addWidget(clear_urls_btn)
+        url_btn_row.addWidget(self.image_url_status)
+        url_btn_row.addStretch()
+        url_btn_row.addWidget(self.image_download_btn)
+        url_btn_row.addSpacing(8)
+        url_btn_row.addWidget(options_btn)
+        
+        url_layout.addLayout(url_btn_row)
+        url_frame.layout().addLayout(url_layout)
+        layout.addWidget(url_frame)
+        
+        # === OPTIONS ROW ===
+        options_frame = self.create_section("Save Location")
+        options_row = QHBoxLayout()
+        options_row.setSpacing(10)
+        
+        options_row.addWidget(self.create_label("Save to:"))
+        self.image_output = QLineEdit()
+        self.image_output.setText("downloads/images")
+        self.image_output.setFixedHeight(32)
+        self.style_input(self.image_output)
+        self.image_output.textChanged.connect(self.auto_save_settings)
+        options_row.addWidget(self.image_output)
+        
+        browse_btn = QPushButton("Browse")
+        browse_btn.setFixedHeight(32)
+        browse_btn.setMinimumWidth(80)
+        browse_btn.clicked.connect(self.browse_image_output)
+        self.style_btn_secondary(browse_btn)
+        options_row.addWidget(browse_btn)
+        
+        options_frame.layout().addLayout(options_row)
+        layout.addWidget(options_frame)
+        
+        # === PROGRESS SECTION ===
+        progress_frame = self.create_section("Progress")
+        progress_layout = QVBoxLayout()
+        progress_layout.setSpacing(8)
+        
+        # Progress header with stats
+        header_row = QHBoxLayout()
+        
+        self.image_status_label = QLabel("Ready to download")
+        self.image_status_label.setStyleSheet("""
+            QLabel {
+                color: #58a6ff;
+                font-size: 12px;
+                font-weight: bold;
+                border: none;
+                background: transparent;
+            }
+        """)
+        header_row.addWidget(self.image_status_label)
+        
+        header_row.addStretch()
+        
+        # Stats labels
+        self.image_stats_label = QLabel("")
+        self.image_stats_label.setStyleSheet("color: #7d8590; font-size: 11px; border: none; background: transparent;")
+        header_row.addWidget(self.image_stats_label)
+        
+        # Stop button
+        self.image_stop_btn = QPushButton("Stop")
+        self.image_stop_btn.setFixedSize(60, 26)
+        self.image_stop_btn.setEnabled(False)
+        self.image_stop_btn.clicked.connect(self.stop_image_download)
+        self.image_stop_btn.setStyleSheet("""
+            QPushButton {
+                background: #da3633;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: #f85149;
+            }
+            QPushButton:disabled {
+                background: #21262d;
+                color: #7d8590;
+            }
+        """)
+        header_row.addWidget(self.image_stop_btn)
+        
+        progress_layout.addLayout(header_row)
+        
+        # Progress bar
+        self.image_progress_bar = QProgressBar()
+        self.image_progress_bar.setFixedHeight(8)
+        self.image_progress_bar.setValue(0)
+        self.image_progress_bar.setTextVisible(False)
+        self.image_progress_bar.setStyleSheet("""
+            QProgressBar {
+                background: #21262d;
+                border: none;
+                border-radius: 4px;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #238636, stop:1 #3fb950);
+                border-radius: 4px;
+            }
+        """)
+        progress_layout.addWidget(self.image_progress_bar)
+        
+        # Log area
+        self.image_progress_text = QTextEdit()
+        self.image_progress_text.setReadOnly(True)
+        self.image_progress_text.setPlaceholderText("Download activity will appear here...")
+        self.image_progress_text.setStyleSheet("""
+            QTextEdit {
+                background: #0d1117;
+                color: #c9d1d9;
+                border: 1px solid #21262d;
+                border-radius: 6px;
+                padding: 8px;
+                font-size: 11px;
+                font-family: 'Consolas', 'Monaco', monospace;
+            }
+        """)
+        progress_layout.addWidget(self.image_progress_text)
+        
+        progress_frame.layout().addLayout(progress_layout)
+        layout.addWidget(progress_frame, 1)
+        
+        # Default option values (will be set by dialog)
+        self._image_subfolder = True
+        self._image_skip_duplicates = True
+        self._image_highres = True
+        self._image_skip_icons = True
+        self._image_overwrite = False
+        self._image_format = "All formats"
+        self._image_concurrent = 4
+        self._image_min_size = 0
+        self._image_pinterest_max = 50  # Max images for Pinterest search URLs
+        
+        self.image_download_stopped = False
+        
+        return tab_widget
+    
+    def create_edit_videos_tab(self):
+        """Create Edit Videos tab for batch video editing"""
+        tab_widget = QWidget()
+        layout = QVBoxLayout(tab_widget)
+        layout.setSpacing(12)
+        layout.setContentsMargins(15, 15, 15, 15)
+        
+        # === INPUT SOURCE ===
+        input_label = QLabel("Input (Folder or Video):")
+        input_label.setStyleSheet("color: #58a6ff; font-weight: bold; font-size: 12px;")
+        layout.addWidget(input_label)
+        
+        input_row = QHBoxLayout()
+        input_row.setSpacing(8)
+        self.edit_input_folder = QLineEdit()
+        self.edit_input_folder.setPlaceholderText("Select folder or video file...")
+        self.edit_input_folder.setFixedHeight(32)
+        self.style_input(self.edit_input_folder)
+        self.edit_input_folder.textChanged.connect(self.update_edit_video_count)
+        input_row.addWidget(self.edit_input_folder)
+        
+        browse_folder_btn = QPushButton("Folder")
+        browse_folder_btn.setFixedSize(70, 32)
+        browse_folder_btn.clicked.connect(self.browse_edit_input_folder)
+        self.style_btn_secondary(browse_folder_btn)
+        input_row.addWidget(browse_folder_btn)
+        
+        browse_file_btn = QPushButton("File")
+        browse_file_btn.setFixedSize(60, 32)
+        browse_file_btn.clicked.connect(self.browse_edit_input_file)
+        self.style_btn_secondary(browse_file_btn)
+        input_row.addWidget(browse_file_btn)
+        layout.addLayout(input_row)
+        
+        # Video count
+        self.edit_video_count = QLabel("No folder selected")
+        self.edit_video_count.setStyleSheet("color: #7d8590; font-size: 10px; margin-bottom: 5px;")
+        layout.addWidget(self.edit_video_count)
+        
+        # === OUTPUT FOLDER ===
+        output_label = QLabel("Output Folder:")
+        output_label.setStyleSheet("color: #58a6ff; font-weight: bold; font-size: 12px;")
+        layout.addWidget(output_label)
+        
+        output_row = QHBoxLayout()
+        output_row.setSpacing(8)
+        self.edit_output_folder = QLineEdit()
+        self.edit_output_folder.setPlaceholderText("Select output folder for edited videos...")
+        self.edit_output_folder.setText("downloads/edited")
+        self.edit_output_folder.setFixedHeight(32)
+        self.style_input(self.edit_output_folder)
+        output_row.addWidget(self.edit_output_folder)
+        
+        browse_output_btn = QPushButton("Browse")
+        browse_output_btn.setFixedSize(80, 32)
+        browse_output_btn.clicked.connect(self.browse_edit_output)
+        self.style_btn_secondary(browse_output_btn)
+        output_row.addWidget(browse_output_btn)
+        layout.addLayout(output_row)
+        
+        layout.addSpacing(5)
+        
+        # === SETTINGS & ACTIONS ROW ===
+        actions_row = QHBoxLayout()
+        actions_row.setSpacing(10)
+        
+        # Settings button
+        settings_btn = QPushButton("Edit Settings")
+        settings_btn.setFixedHeight(36)
+        settings_btn.setMinimumWidth(120)
+        settings_btn.clicked.connect(self.show_edit_settings_dialog)
+        self.style_btn_secondary(settings_btn)
+        actions_row.addWidget(settings_btn)
+        
+        # Current settings label
+        self.edit_settings_label = QLabel("Default settings")
+        self.edit_settings_label.setStyleSheet("color: #7d8590; font-size: 11px;")
+        actions_row.addWidget(self.edit_settings_label, 1)
+        
+        # Start button
+        self.start_edit_btn = QPushButton("Start Editing")
+        self.start_edit_btn.setFixedHeight(36)
+        self.start_edit_btn.setMinimumWidth(130)
+        self.start_edit_btn.clicked.connect(self.start_video_editing)
+        self.style_btn_green(self.start_edit_btn)
+        actions_row.addWidget(self.start_edit_btn)
+        
+        # Stop button
+        self.stop_edit_btn = QPushButton("Stop")
+        self.stop_edit_btn.setFixedSize(60, 36)
+        self.stop_edit_btn.setEnabled(False)
+        self.stop_edit_btn.clicked.connect(self.stop_video_editing)
+        self.stop_edit_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(248, 81, 73, 0.8);
+                color: white;
+                border: none;
+                border-radius: 0px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background: rgba(248, 81, 73, 1.0); }
+            QPushButton:disabled { background: #21262d; color: #484f58; }
+        """)
+        actions_row.addWidget(self.stop_edit_btn)
+        layout.addLayout(actions_row)
+        
+        layout.addSpacing(5)
+        
+        # === PROGRESS SECTION ===
+        progress_label = QLabel("[G] Progress:")
+        progress_label.setStyleSheet("color: #58a6ff; font-weight: bold; font-size: 12px;")
+        layout.addWidget(progress_label)
+        
+        # Progress bar row
+        progress_row = QHBoxLayout()
+        progress_row.setSpacing(10)
+        self.edit_progress_bar = QProgressBar()
+        self.edit_progress_bar.setFixedHeight(18)
+        self.edit_progress_bar.setStyleSheet("""
+            QProgressBar {
+                background: #21262d;
+                border: none;
+                border-radius: 0px;
+                text-align: center;
+                color: #f0f6fc;
+                font-size: 10px;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #238636, stop:1 #2ea043);
+            }
+        """)
+        progress_row.addWidget(self.edit_progress_bar)
+        
+        self.edit_status_label = QLabel("Ready")
+        self.edit_status_label.setStyleSheet("color: #7d8590; font-size: 11px; min-width: 80px;")
+        self.edit_status_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        progress_row.addWidget(self.edit_status_label)
+        layout.addLayout(progress_row)
+        
+        # Log text
+        self.edit_log_text = QTextEdit()
+        self.edit_log_text.setReadOnly(True)
+        self.edit_log_text.setPlaceholderText("Edit log will appear here...")
+        self.edit_log_text.setStyleSheet("""
+            QTextEdit {
+                background: #0d1117;
+                color: #c9d1d9;
+                border: none;
+                border-radius: 0px;
+                font-family: 'Consolas', 'Monaco', monospace;
+                font-size: 11px;
+                padding: 8px;
+            }
+        """)
+        layout.addWidget(self.edit_log_text, 1)
+        
+        # Initialize edit settings
+        self._edit_settings = {
+            'resolution': 'Original',
+            'enable_logo': False,
+            'logo_path': '',
+            'logo_position': 'Bottom-Right',
+            'logo_opacity': 80,
+            'logo_scale': 15,
+            'enable_trim': False,
+            'trim_start': 0,
+            'trim_end': 0,
+            'mute_audio': False,
+            'volume': 100,
+            'speed': 1.0,
+            'output_format': 'MP4 (H.264)',
+            'quality_crf': 23
+        }
+        self._edit_stopped = False
+        
+        return tab_widget
+    
+    def show_image_options_dialog(self):
+        """Show image download options dialog"""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Image Download Options")
+        dialog.setFixedSize(450, 450)
+        dialog.setStyleSheet("""
+            QDialog {
+                background: #161b22;
+                color: #f0f6fc;
+                border: 1px solid #30363d;
+                border-radius: 12px;
+            }
+            QLabel {
+                color: #f0f6fc;
+                font-size: 12px;
+                border: none;
+                background: transparent;
+            }
+            QCheckBox {
+                color: #f0f6fc;
+                font-size: 12px;
+                spacing: 8px;
+            }
+            QCheckBox::indicator {
+                width: 18px;
+                height: 18px;
+                border: 2px solid #30363d;
+                border-radius: 4px;
+                background: #21262d;
+            }
+            QCheckBox::indicator:checked {
+                background: #238636;
+                border-color: #238636;
+            }
+            QComboBox {
+                background: #21262d;
+                color: #f0f6fc;
+                border: 1px solid #30363d;
+                border-radius: 6px;
+                padding: 4px 10px;
+                font-size: 13px;
+                min-width: 160px;
+                min-height: 32px;
+            }
+            QComboBox::drop-down {
+                border: none;
+                width: 24px;
+            }
+            QComboBox::down-arrow {
+                width: 12px;
+                height: 12px;
+            }
+            QSpinBox {
+                background: #21262d;
+                color: #f0f6fc;
+                border: 1px solid #30363d;
+                border-radius: 6px;
+                padding: 4px 10px;
+                font-size: 13px;
+                min-width: 80px;
+                min-height: 32px;
+            }
+        """)
+        
+        layout = QVBoxLayout(dialog)
+        layout.setSpacing(15)
+        layout.setContentsMargins(25, 25, 25, 25)
+        
+        # Title
+        title = QLabel("Download Options")
+        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #58a6ff;")
+        layout.addWidget(title)
+        
+        # Options grid
+        options_layout = QVBoxLayout()
+        options_layout.setSpacing(12)
+        
+        # Checkboxes
+        subfolder_cb = QCheckBox("Create subfolder by platform")
+        subfolder_cb.setChecked(self._image_subfolder)
+        options_layout.addWidget(subfolder_cb)
+        
+        skip_dup_cb = QCheckBox("Skip duplicate images")
+        skip_dup_cb.setChecked(self._image_skip_duplicates)
+        options_layout.addWidget(skip_dup_cb)
+        
+        highres_cb = QCheckBox("Get highest resolution")
+        highres_cb.setChecked(self._image_highres)
+        options_layout.addWidget(highres_cb)
+        
+        skip_icons_cb = QCheckBox("Skip icons and thumbnails")
+        skip_icons_cb.setChecked(self._image_skip_icons)
+        options_layout.addWidget(skip_icons_cb)
+        
+        overwrite_cb = QCheckBox("Overwrite existing files")
+        overwrite_cb.setChecked(self._image_overwrite)
+        options_layout.addWidget(overwrite_cb)
+        
+        options_layout.addSpacing(15)
+        
+        # Format filter
+        format_row = QHBoxLayout()
+        format_label = QLabel("Image format:")
+        format_label.setFixedWidth(150)
+        format_row.addWidget(format_label)
+        format_combo = QComboBox()
+        format_combo.addItems(["All formats", "JPG/JPEG", "PNG", "GIF", "WebP"])
+        format_combo.setCurrentText(self._image_format)
+        format_row.addWidget(format_combo)
+        format_row.addStretch()
+        options_layout.addLayout(format_row)
+        
+        # Concurrent downloads
+        concurrent_row = QHBoxLayout()
+        concurrent_label = QLabel("Concurrent downloads:")
+        concurrent_label.setFixedWidth(150)
+        concurrent_row.addWidget(concurrent_label)
+        concurrent_spin = QSpinBox()
+        concurrent_spin.setRange(1, 10)
+        concurrent_spin.setValue(self._image_concurrent)
+        concurrent_row.addWidget(concurrent_spin)
+        concurrent_row.addStretch()
+        options_layout.addLayout(concurrent_row)
+        
+        # Min size
+        size_row = QHBoxLayout()
+        size_label = QLabel("Minimum size (KB):")
+        size_label.setFixedWidth(150)
+        size_row.addWidget(size_label)
+        min_size_spin = QSpinBox()
+        min_size_spin.setRange(0, 10000)
+        min_size_spin.setValue(self._image_min_size)
+        size_row.addWidget(min_size_spin)
+        size_row.addStretch()
+        options_layout.addLayout(size_row)
+        
+        # Pinterest max images
+        pinterest_row = QHBoxLayout()
+        pinterest_label = QLabel("Pinterest search max:")
+        pinterest_label.setFixedWidth(150)
+        pinterest_label.setToolTip("Maximum images to download from Pinterest search URLs")
+        pinterest_row.addWidget(pinterest_label)
+        pinterest_spin = QSpinBox()
+        pinterest_spin.setRange(10, 500)
+        pinterest_spin.setValue(self._image_pinterest_max)
+        pinterest_spin.setToolTip("Maximum images to download from Pinterest search URLs")
+        pinterest_row.addWidget(pinterest_spin)
+        pinterest_row.addStretch()
+        options_layout.addLayout(pinterest_row)
+        
+        layout.addLayout(options_layout)
+        layout.addStretch()
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        
+        def save_and_close():
+            # Save values
+            self._image_subfolder = subfolder_cb.isChecked()
+            self._image_skip_duplicates = skip_dup_cb.isChecked()
+            self._image_highres = highres_cb.isChecked()
+            self._image_skip_icons = skip_icons_cb.isChecked()
+            self._image_overwrite = overwrite_cb.isChecked()
+            self._image_format = format_combo.currentText()
+            self._image_concurrent = concurrent_spin.value()
+            self._image_min_size = min_size_spin.value()
+            self._image_pinterest_max = pinterest_spin.value()
+            dialog.accept()
+        
+        save_btn = QPushButton("Save")
+        save_btn.setFixedSize(100, 36)
+        save_btn.clicked.connect(save_and_close)
+        save_btn.setStyleSheet("""
+            QPushButton {
+                background: #238636;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-size: 13px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: #2ea043;
+            }
+        """)
+        btn_layout.addWidget(save_btn)
+        
+        layout.addLayout(btn_layout)
+        
+        # Center dialog on screen
+        screen = QApplication.primaryScreen().geometry()
+        dialog_x = (screen.width() - dialog.width()) // 2
+        dialog_y = (screen.height() - dialog.height()) // 2
+        dialog.move(dialog_x, dialog_y)
+        
+        dialog.exec()
+    
+    def stop_image_download(self):
+        """Stop ongoing image download"""
+        self.image_download_stopped = True
+        self.image_status_label.setText("Stopping...")
+        self.image_stop_btn.setEnabled(False)
+    
     def get_multiple_info(self):
         """Get info for multiple URLs using dialog display"""
         selected_urls = self.url_list_widget.get_selected_urls()
@@ -3583,7 +6140,7 @@ class MainWindow(QMainWindow):
         
         # Show progress in the text area while processing
         self.multi_info_text.clear()
-        self.multi_info_text.append(f"🔍 Getting info for {len(selected_urls)} selected videos...")
+        self.multi_info_text.append(f"[?] Getting info for {len(selected_urls)} selected videos...")
         self.multi_info_text.append("Please wait...")
         
         # Process URLs and collect results
@@ -3631,8 +6188,8 @@ class MainWindow(QMainWindow):
         
         # Clear the progress text
         self.multi_info_text.clear()
-        self.multi_info_text.append(f"✅ Info check completed for {len(selected_urls)} videos")
-        self.multi_info_text.append("📋 Results shown in dialog - check individual video details")
+        self.multi_info_text.append(f"[OK] Info check completed for {len(selected_urls)} videos")
+        self.multi_info_text.append("[L] Results shown in dialog - check individual video details")
         
         # Show results in dialog
         if video_results:
@@ -3669,7 +6226,7 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(20, 20, 20, 20)
         
         # Title
-        title = QLabel("📋 Supported Video URL Formats")
+        title = QLabel("[L] Supported Video URL Formats")
         title.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
         title.setStyleSheet("color: #58a6ff; font-size: 14px; margin-bottom: 10px;")
         layout.addWidget(title)
@@ -3689,44 +6246,44 @@ class MainWindow(QMainWindow):
         content_layout = QVBoxLayout(content_widget)
         
         help_text = """
-<b style="color: #2ea043;">✅ SUPPORTED PLATFORMS:</b><br><br>
+<b style="color: #2ea043;">[OK] SUPPORTED PLATFORMS:</b><br><br>
 
 <b style="color: #58a6ff;">YouTube:</b><br>
-• youtube.com/watch?v=VIDEO_ID<br>
-• youtu.be/VIDEO_ID<br>
-• youtube.com/playlist?list=PLAYLIST_ID<br><br>
+- youtube.com/watch?v=VIDEO_ID<br>
+- youtu.be/VIDEO_ID<br>
+- youtube.com/playlist?list=PLAYLIST_ID<br><br>
 
 <b style="color: #58a6ff;">Facebook:</b><br>
-• facebook.com/watch/?v=VIDEO_ID<br>
-• facebook.com/USERNAME/videos/VIDEO_ID<br>
-• fb.watch/VIDEO_ID<br><br>
+- facebook.com/watch/?v=VIDEO_ID<br>
+- facebook.com/USERNAME/videos/VIDEO_ID<br>
+- fb.watch/VIDEO_ID<br><br>
 
 <b style="color: #58a6ff;">TikTok:</b><br>
-• tiktok.com/@username/video/VIDEO_ID<br>
-• vm.tiktok.com/SHORT_CODE<br><br>
+- tiktok.com/@username/video/VIDEO_ID<br>
+- vm.tiktok.com/SHORT_CODE<br><br>
 
 <b style="color: #58a6ff;">Instagram:</b><br>
-• instagram.com/p/POST_ID<br>
-• instagram.com/reel/REEL_ID<br><br>
+- instagram.com/p/POST_ID<br>
+- instagram.com/reel/REEL_ID<br><br>
 
 <b style="color: #58a6ff;">Twitter/X:</b><br>
-• twitter.com/username/status/TWEET_ID<br>
-• x.com/username/status/TWEET_ID<br><br>
+- twitter.com/username/status/TWEET_ID<br>
+- x.com/username/status/TWEET_ID<br><br>
 
 <b style="color: #58a6ff;">Other Platforms:</b><br>
-• Vimeo, Twitch, Dailymotion, and 1000+ more<br><br>
+- Vimeo, Twitch, Dailymotion, and 1000+ more<br><br>
 
-<b style="color: #f85149;">❌ NOT SUPPORTED:</b><br>
-• Profile/channel URLs (use direct video links)<br>
-• Share URLs (copy the original video URL)<br>
-• Private or restricted videos<br>
-• Live streams (in most cases)<br><br>
+<b style="color: #f85149;">[X] NOT SUPPORTED:</b><br>
+- Profile/channel URLs (use direct video links)<br>
+- Share URLs (copy the original video URL)<br>
+- Private or restricted videos<br>
+- Live streams (in most cases)<br><br>
 
-<b style="color: #ffab00;">💡 TIPS:</b><br>
-• Always use direct video URLs, not profile links<br>
-• If a URL doesn't work, try copying it again from the source<br>
-• Some platforms may require the video to be public<br>
-• Check the video is still available and not deleted
+<b style="color: #ffab00;">[*] TIPS:</b><br>
+- Always use direct video URLs, not profile links<br>
+- If a URL doesn't work, try copying it again from the source<br>
+- Some platforms may require the video to be public<br>
+- Check the video is still available and not deleted
         """
         
         content_label = QLabel(help_text)
@@ -3749,7 +6306,7 @@ class MainWindow(QMainWindow):
         """Clear all URLs and update status"""
         self.url_list_widget.clear_all()
         self.update_url_status()
-        self.multi_log("🗑 Cleared all URLs")
+        self.multi_log("[D] Cleared all URLs")
     
     def update_url_status(self):
         """Update the URL status label"""
@@ -3832,10 +6389,10 @@ class MainWindow(QMainWindow):
             if hasattr(self, 'multi_worker') and self.multi_worker:
                 if self.multi_progress_dialog.paused:
                     self.multi_worker.resume()
-                    self.multi_log("▶️ Downloads resumed from dialog")
+                    self.multi_log("[>] Downloads resumed from dialog")
                 else:
                     self.multi_worker.pause()
-                    self.multi_log("⏸ Downloads paused from dialog")
+                    self.multi_log("[||] Downloads paused from dialog")
         
         self.multi_progress_dialog.pause_btn.clicked.connect(handle_dialog_pause)
         
@@ -3846,7 +6403,7 @@ class MainWindow(QMainWindow):
         self.multi_pause_btn.setEnabled(True)
         self.multi_stop_btn.setEnabled(True)
         
-        self.multi_log(f"🚀 Starting batch download of {len(selected_urls)} selected videos...")
+        self.multi_log(f"[!] Starting batch download of {len(selected_urls)} selected videos...")
         self.update_multi_status(f"Downloading: 0/{len(selected_urls)} completed")
 
     def paste_multiple_urls(self):
@@ -3855,7 +6412,7 @@ class MainWindow(QMainWindow):
         if clipboard_text.strip():
             # Debug: Show what was pasted
             lines = clipboard_text.strip().split('\n')
-            self.multi_log(f"📋 Pasting {len(lines)} lines from clipboard:")
+            self.multi_log(f"[L] Pasting {len(lines)} lines from clipboard:")
             for i, line in enumerate(lines[:5], 1):  # Show first 5 lines
                 if line.strip():
                     self.multi_log(f"   {i}. {line.strip()[:60]}...")
@@ -3865,22 +6422,22 @@ class MainWindow(QMainWindow):
             added_count, invalid_count, problematic_count = self.url_list_widget.add_urls_from_text(clipboard_text)
             
             # Detailed results
-            self.multi_log(f"📊 Results: {added_count} valid, {problematic_count} problematic, {invalid_count} invalid")
+            self.multi_log(f"[G] Results: {added_count} valid, {problematic_count} problematic, {invalid_count} invalid")
             
             if added_count > 0:
-                self.multi_log(f"✅ Added {added_count} valid URLs")
+                self.multi_log(f"[OK] Added {added_count} valid URLs")
             if problematic_count > 0:
-                self.multi_log(f"⚠ Added {problematic_count} problematic URLs (may not work)")
+                self.multi_log(f"[!] Added {problematic_count} problematic URLs (may not work)")
             if invalid_count > 0:
-                self.multi_log(f"❌ Skipped {invalid_count} invalid URLs")
+                self.multi_log(f"[X] Skipped {invalid_count} invalid URLs")
             
             if added_count == 0 and problematic_count == 0:
                 if invalid_count > 0:
-                    self.multi_log(f"❌ Found only invalid URLs in clipboard")
+                    self.multi_log(f"[X] Found only invalid URLs in clipboard")
                 else:
-                    self.multi_log("⚠ No valid URLs found in clipboard")
+                    self.multi_log("[!] No valid URLs found in clipboard")
         else:
-            self.multi_log("⚠ Clipboard is empty")
+            self.multi_log("[!] Clipboard is empty")
         
         # Update status after pasting
         self.update_url_status()
@@ -3891,13 +6448,13 @@ class MainWindow(QMainWindow):
         if self.multi_worker:
             if self.multi_worker.paused:
                 self.multi_worker.resume()
-                self.multi_pause_btn.setText("⏸ Pause")
-                self.multi_log("▶️ Downloads resumed")
+                self.multi_pause_btn.setText("Pause")
+                self.multi_log("Downloads resumed")
                 self.update_multi_status("Downloading (resumed)")
             else:
                 self.multi_worker.pause()
-                self.multi_pause_btn.setText("▶️ Resume")
-                self.multi_log("⏸ Downloads paused")
+                self.multi_pause_btn.setText("Resume")
+                self.multi_log("Downloads paused")
                 self.update_multi_status("Paused")
     
     def stop_multiple_downloads(self):
@@ -3908,7 +6465,7 @@ class MainWindow(QMainWindow):
             if self.multi_worker.isRunning():
                 self.multi_worker.terminate()
                 self.multi_worker.wait(2000)  # Wait up to 2 seconds
-            self.multi_log("⏹ Downloads stopped by user")
+            self.multi_log("[STOP] Downloads stopped by user")
             self.update_multi_status("Stopped")
             # Reset UI
             self.multi_download_btn.setEnabled(True)
@@ -3929,17 +6486,17 @@ class MainWindow(QMainWindow):
             self.multi_pause_btn.setEnabled(False)
             self.multi_stop_btn.setEnabled(False)
             self.update_multi_status("Cancelled by user")
-            self.multi_log("⏹ Multiple downloads cancelled by user")
+            self.multi_log("[STOP] Multiple downloads cancelled by user")
 
     def on_multi_video_started(self, index, url):
         """Handle when a video download starts"""
-        self.multi_log(f"📥 [{index+1}] Starting: {url[:60]}...")
+        self.multi_log(f"[DL] [{index+1}] Starting: {url[:60]}...")
         if hasattr(self, 'multi_progress_dialog'):
             self.multi_progress_dialog.start_video(index, url)
     
     def on_multi_video_completed(self, index, success, message, file_path):
         """Handle when a video download completes"""
-        status = "✅" if success else "❌"
+        status = "[OK]" if success else "[X]"
         self.multi_log(f"{status} [{index+1}] {message}")
         if hasattr(self, 'multi_progress_dialog'):
             self.multi_progress_dialog.complete_video(index, success)
@@ -3955,21 +6512,21 @@ class MainWindow(QMainWindow):
         self.multi_download_btn.setEnabled(True)
         self.multi_pause_btn.setEnabled(False)
         self.multi_stop_btn.setEnabled(False)
-        self.multi_pause_btn.setText("⏸ Pause")
+        self.multi_pause_btn.setText("Pause")
         
         # Show completion summary
         if stopped:
-            self.multi_log(f"⏹ Batch stopped: {completed}/{total} completed, {failed} failed")
+            self.multi_log(f"[STOP] Batch stopped: {completed}/{total} completed, {failed} failed")
             self.update_multi_status(f"Stopped: {completed}/{total} completed")
         else:
-            self.multi_log(f"🎉 Batch complete: {completed}/{total} successful, {failed} failed")
+            self.multi_log(f"[*] Batch complete: {completed}/{total} successful, {failed} failed")
             self.update_multi_status(f"Complete: {completed}/{total} successful")
         
         # Show failed URLs if any
         if summary['failed_urls']:
-            self.multi_log("❌ Failed URLs:")
+            self.multi_log("[X] Failed URLs:")
             for url in summary['failed_urls']:
-                self.multi_log(f"   • {url}")
+                self.multi_log(f"   - {url}")
         
         # Show completion dialog
         if completed > 0:
@@ -3996,7 +6553,7 @@ class MainWindow(QMainWindow):
         tab_widget.setStyleSheet("""
             QTabWidget::pane {
                 border: 1px solid #30363d;
-                border-radius: 8px;
+                border-radius: 0px;
                 background: #161b22;
                 margin-top: 2px;
             }
@@ -4008,8 +6565,7 @@ class MainWindow(QMainWindow):
                 color: #7d8590;
                 padding: 8px 16px;
                 margin-right: 2px;
-                border-top-left-radius: 6px;
-                border-top-right-radius: 6px;
+                border-radius: 0px;
                 font-weight: 500;
                 min-width: 120px;
             }
@@ -4080,7 +6636,7 @@ class MainWindow(QMainWindow):
                 continue
         
         if not logo_loaded:
-            app_icon.setText("⬇")
+            app_icon.setText("V")
             app_icon.setStyleSheet("font-size: 18px; color: #58a6ff; border: 0px; background: none; outline: 0px;")
         
         # App title
@@ -4097,22 +6653,31 @@ class MainWindow(QMainWindow):
         version_label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         version_label.setStyleSheet("color: #22c55e; border: 0px; background: none; outline: 0px; margin-left: 5px;")
         
+        # App ID label (for management)
+        app_id_label = QLabel(f"[{self.app_id}]")
+        app_id_label.setFont(QFont("Segoe UI", 9))
+        app_id_label.setFrameStyle(QLabel.Shape.NoFrame)
+        app_id_label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        app_id_label.setStyleSheet("color: #6b7280; border: 0px; background: none; outline: 0px; margin-left: 8px;")
+        app_id_label.setToolTip(f"Installation ID: {self.app_id}")
+        
         left_section.addWidget(app_icon)
         left_section.addWidget(app_title)
         left_section.addWidget(version_label)
+        left_section.addWidget(app_id_label)
         
         # === CENTER: Toolbar Actions ===
         center_section = QHBoxLayout()
         center_section.setSpacing(8)
         
         # Quick action buttons in title bar
-        self.tb_paste_btn = self.create_titlebar_btn("📋", "Paste")
+        self.tb_paste_btn = self.create_titlebar_btn("\U0001F4CB", "Paste")  # clipboard
         self.tb_paste_btn.clicked.connect(self.paste_url)
         
-        self.tb_info_btn = self.create_titlebar_btn("ℹ️", "Info")
+        self.tb_info_btn = self.create_titlebar_btn("\u2139", "Info")  # info
         self.tb_info_btn.clicked.connect(self.get_info)
         
-        self.tb_download_btn = self.create_titlebar_btn("⬇️", "Download")
+        self.tb_download_btn = self.create_titlebar_btn("\u2B07", "Download")  # down arrow
         self.tb_download_btn.clicked.connect(self.download)
         
         # Separator
@@ -4120,10 +6685,10 @@ class MainWindow(QMainWindow):
         sep.setFixedSize(1, 25)
         sep.setStyleSheet("background: #404040; border: none;")
         
-        self.tb_folder_btn = self.create_titlebar_btn("📁", "Folder")
+        self.tb_folder_btn = self.create_titlebar_btn("\U0001F4C1", "Folder")  # folder
         self.tb_folder_btn.clicked.connect(self.open_downloads_folder)
         
-        self.tb_settings_btn = self.create_titlebar_btn("⚙️", "Settings")
+        self.tb_settings_btn = self.create_titlebar_btn("\u2699", "Settings")  # gear
         self.tb_settings_btn.clicked.connect(self.show_settings)
         
         center_section.addWidget(self.tb_paste_btn)
@@ -4137,6 +6702,15 @@ class MainWindow(QMainWindow):
         right_section = QHBoxLayout()
         right_section.setSpacing(0)
         
+        # License info indicator
+        self.license_info_label = QLabel("")
+        self.license_info_label.setFont(QFont("Segoe UI", 9))
+        self.license_info_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.license_info_label.setFrameStyle(QLabel.Shape.NoFrame)
+        self.license_info_label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.license_info_label.setStyleSheet("color: #58a6ff; border: 0px; background: none; outline: 0px; margin-right: 15px;")
+        self.update_license_display()
+        
         # Status indicator
         self.title_status = QLabel("Ready")
         self.title_status.setFont(QFont("Segoe UI", 9))
@@ -4147,13 +6721,13 @@ class MainWindow(QMainWindow):
         self.title_status.setStyleSheet("color: #00ff88; border: 0px; background: none; outline: 0px; margin-right: 10px;")
         
         # Window control buttons
-        minimize_btn = self.create_window_btn("🗕", "Minimize")
+        minimize_btn = self.create_window_btn("\u2014", "Minimize")  # em dash
         minimize_btn.clicked.connect(self.showMinimized)
         
-        maximize_btn = self.create_window_btn("🗖", "Maximize")
+        maximize_btn = self.create_window_btn("\u25A1", "Maximize")  # white square
         maximize_btn.clicked.connect(self.toggle_maximize)
         
-        close_btn = self.create_window_btn("✕", "Close")
+        close_btn = self.create_window_btn("\u2715", "Close")  # multiplication x
         close_btn.clicked.connect(self.close)
         close_btn.setStyleSheet("""
             QPushButton {
@@ -4170,6 +6744,7 @@ class MainWindow(QMainWindow):
             }
         """)
         
+        right_section.addWidget(self.license_info_label)
         right_section.addWidget(self.title_status)
         right_section.addWidget(minimize_btn)
         right_section.addWidget(maximize_btn)
@@ -4220,12 +6795,14 @@ class MainWindow(QMainWindow):
             QPushButton {
                 background: transparent;
                 border: none;
-                color: #ffffff;
-                font-size: 12px;
-                font-weight: bold;
+                color: #8b949e;
+                font-size: 16px;
+                font-family: Consolas, monospace;
+                font-weight: normal;
             }
             QPushButton:hover {
                 background: rgba(255, 255, 255, 0.1);
+                color: #ffffff;
             }
         """)
         return btn
@@ -4467,7 +7044,7 @@ class MainWindow(QMainWindow):
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #22c55e, stop:1 #16a34a);
                 color: white;
                 border: none;
-                border-radius: 10px;
+                border-radius: 0px;
                 font-size: 13px;
                 font-weight: bold;
                 padding: 8px 24px;
@@ -4490,7 +7067,7 @@ class MainWindow(QMainWindow):
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #6366f1, stop:1 #4f46e5);
                 color: white;
                 border: none;
-                border-radius: 10px;
+                border-radius: 0px;
                 font-size: 13px;
                 font-weight: bold;
                 padding: 8px 24px;
@@ -4513,7 +7090,7 @@ class MainWindow(QMainWindow):
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #374151, stop:1 #1f2937);
                 color: #e5e7eb;
                 border: 1px solid #4b5563;
-                border-radius: 10px;
+                border-radius: 0px;
                 font-size: 12px;
                 font-weight: 600;
                 padding: 8px 16px;
@@ -4548,9 +7125,9 @@ class MainWindow(QMainWindow):
                 subprocess.run(["open", str(folder_path)])
             else:  # Linux
                 subprocess.run(["xdg-open", str(folder_path)])
-            self.log("📁 Opened downloads folder")
+            self.log("[F] Opened downloads folder")
         except Exception as e:
-            self.log(f"❌ Failed to open folder: {e}")
+            self.log(f"[X] Failed to open folder: {e}")
     
     def show_settings(self):
         """Show a modern settings dialog"""
@@ -4579,7 +7156,7 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(25, 25, 25, 25)
         
         # Title
-        title = QLabel("⚙️ Application Settings")
+        title = QLabel("[S] Application Settings")
         title.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
         title.setStyleSheet("color: #89b4fa; font-size: 14px;")
         layout.addWidget(title)
@@ -4639,7 +7216,7 @@ class MainWindow(QMainWindow):
         )
         
         dialog.exec()
-        self.log("⚙️ Settings accessed")
+        self.log("[S] Settings accessed")
     
     def update_title_status(self, status, color="#00ff88"):
         """Update the title bar status"""
@@ -4657,7 +7234,7 @@ class MainWindow(QMainWindow):
     
     def update_output_directory(self, directory):
         """Update output directory and ensure it's saved"""
-        self.log(f"🔧 update_output_directory called with: '{directory}'")
+        self.log(f"[*] update_output_directory called with: '{directory}'")
         self.output.setText(directory)
         self.dl.output_dir = Path(directory)
         
@@ -4667,9 +7244,9 @@ class MainWindow(QMainWindow):
         
         # Verify what was actually saved
         saved_value = self.settings.value("output_directory", "FAILED")
-        self.log(f"🔧 Immediately after save, settings contains: '{saved_value}'")
+        self.log(f"[*] Immediately after save, settings contains: '{saved_value}'")
         
-        self.log(f"📁 Output directory updated: {directory}")
+        self.log(f"[F] Output directory updated: {directory}")
 
     def browse(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Folder")
@@ -4707,8 +7284,8 @@ class MainWindow(QMainWindow):
             reply = QMessageBox.question(self, "Profile URL Detected", 
                 f"This appears to be a profile/channel URL rather than a single video.\n\n"
                 f"Would you like to:\n"
-                f"• Get profile information and download multiple videos\n"
-                f"• Or continue to get info for this URL as-is?",
+                f"- Get profile information and download multiple videos\n"
+                f"- Or continue to get info for this URL as-is?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.Yes)
             
@@ -4721,17 +7298,17 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "URL Notice", 
                 "This appears to be a Facebook profile URL. For Facebook videos, please use direct video post URLs instead of profile links.\n\n"
                 "Supported Facebook URL formats:\n"
-                "• facebook.com/watch/?v=VIDEO_ID\n"
-                "• facebook.com/USERNAME/videos/VIDEO_ID\n"
-                "• fb.watch/VIDEO_ID")
+                "- facebook.com/watch/?v=VIDEO_ID\n"
+                "- facebook.com/USERNAME/videos/VIDEO_ID\n"
+                "- fb.watch/VIDEO_ID")
             return
         
-        self.log(f"🔍 Getting info for: {url[:60]}...")
+        self.log(f"[?] Getting info for: {url[:60]}...")
         self.start_worker('info', url)
     
     def get_profile_info(self, profile_url):
         """Get information about a profile and show download options"""
-        self.log(f"🔍 Getting profile info for: {profile_url[:60]}...")
+        self.log(f"[?] Getting profile info for: {profile_url[:60]}...")
         
         # Show progress dialog
         progress_dialog = ProgressDialog(self, "Getting Profile Information", "info")
@@ -4748,7 +7325,7 @@ class MainWindow(QMainWindow):
         progress_dialog.close()
         
         if success:
-            self.log(f"✅ Found {data.get('total_found', 0)} videos in profile: {data.get('profile_name', 'Unknown')}")
+            self.log(f"[OK] Found {data.get('total_found', 0)} videos in profile: {data.get('profile_name', 'Unknown')}")
             
             # Show profile download dialog
             profile_dialog = ProfileDownloadDialog(self, data)
@@ -4757,7 +7334,7 @@ class MainWindow(QMainWindow):
                 self.start_profile_download(data, settings)
         else:
             error_msg = data if isinstance(data, str) else "Failed to get profile information"
-            self.log(f"❌ Profile info failed: {error_msg}")
+            self.log(f"[X] Profile info failed: {error_msg}")
             QMessageBox.warning(self, "Profile Info Failed", f"Could not get profile information:\n\n{error_msg}")
     
     def start_profile_download(self, profile_data, settings):
@@ -4765,9 +7342,13 @@ class MainWindow(QMainWindow):
         videos = settings['videos']
         max_videos = settings['max_videos']
         
-        # Limit videos if specified
-        if max_videos and len(videos) > max_videos:
-            videos = videos[:max_videos]
+        # Pass more videos than requested to account for failures
+        # The downloader will stop when it reaches the target successful downloads
+        if max_videos:
+            # Take 3x more videos as buffer for Facebook's high failure rate
+            buffer_count = int(max_videos * 3)
+            if len(videos) > buffer_count:
+                videos = videos[:buffer_count]
         
         # Extract URLs from video data
         video_urls = [video['url'] for video in videos if video.get('url')]
@@ -4776,10 +7357,11 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "No Videos", "No valid video URLs found in this profile.")
             return
         
-        self.log(f"🚀 Starting download of {len(video_urls)} videos from profile: {profile_data.get('profile_name', 'Unknown')}")
+        self.log(f"[!] Starting download of up to {max_videos if max_videos else len(video_urls)} videos from profile: {profile_data.get('profile_name', 'Unknown')}")
+        self.log(f"   (Prepared {len(video_urls)} URLs to handle potential failures)")
         
-        # Use the existing multiple download functionality
-        self.start_multiple_download_with_urls(video_urls)
+        # Use the existing multiple download functionality with target count
+        self.start_multiple_download_with_urls(video_urls, target_success=max_videos)
     
     def get_profile_info_from_tab(self):
         """Get profile info from the profile tab"""
@@ -4800,8 +7382,20 @@ class MainWindow(QMainWindow):
             )
             return
         
+        # Check for Facebook single video URLs (not profile URLs)
+        fb_video_urls = [url for url in selected_urls if self.is_facebook_single_video_url(url)]
+        if fb_video_urls:
+            QMessageBox.warning(
+                self, 
+                "Facebook Video URL Detected",
+                f"Found {len(fb_video_urls)} Facebook video URL(s) in your selection.\n\n"
+                "This appears to be a single video link, not a profile page.\n\n"
+                "Please use the 'Single Download' or 'Multiple Download' tab for video URLs."
+            )
+            return
+        
         self.profile_videos_text.clear()
-        self.profile_videos_text.append(f"🔍 Getting info for {len(selected_urls)} profile(s)...")
+        self.profile_videos_text.append(f"[?] Getting info for {len(selected_urls)} profile(s)...")
         
         # Disable buttons during processing
         self.profile_info_btn.setEnabled(False)
@@ -4828,7 +7422,7 @@ class MainWindow(QMainWindow):
             if hasattr(self, 'profile_info_dialog'):
                 self.profile_info_dialog.close()
             
-            self.profile_videos_text.append(f"\n📊 Total: {self.profile_info_total_videos} videos from {len(self.profile_info_urls)} profile(s)")
+            self.profile_videos_text.append(f"\n[G] Total: {self.profile_info_total_videos} videos from {len(self.profile_info_urls)} profile(s)")
             self.profile_info_btn.setEnabled(True)
             self.profile_download_btn.setEnabled(True)
             
@@ -4836,7 +7430,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(
                 self,
                 "Profile Info Complete",
-                f"✅ Finished getting info for {len(self.profile_info_urls)} profile(s)\n\n"
+                f"[OK] Finished getting info for {len(self.profile_info_urls)} profile(s)\n\n"
                 f"Total videos found: {self.profile_info_total_videos}"
             )
             return
@@ -4860,12 +7454,12 @@ class MainWindow(QMainWindow):
         if success:
             profile_name = data.get('profile_name', 'Unknown')
             total_found = data.get('total_found', 0)
-            self.profile_videos_text.append(f"   ✅ {profile_name}: {total_found} videos found")
+            self.profile_videos_text.append(f"   [OK] {profile_name}: {total_found} videos found")
             self.profile_info_total_videos += total_found
             self.profile_info_results.append(data)
         else:
             error_msg = data if isinstance(data, str) else "Unknown error"
-            self.profile_videos_text.append(f"   ❌ Error: {error_msg[:50]}")
+            self.profile_videos_text.append(f"   [X] Error: {error_msg[:50]}")
         
         # Process next
         self.profile_info_index += 1
@@ -4890,8 +7484,20 @@ class MainWindow(QMainWindow):
             )
             return
         
+        # Check for Facebook single video URLs (not profile URLs)
+        fb_video_urls = [url for url in selected_urls if self.is_facebook_single_video_url(url)]
+        if fb_video_urls:
+            QMessageBox.warning(
+                self, 
+                "Facebook Video URL Detected",
+                f"Found {len(fb_video_urls)} Facebook video URL(s) in your selection.\n\n"
+                "This appears to be a single video link, not a profile page.\n\n"
+                "Please use the 'Single Download' or 'Multiple Download' tab for video URLs."
+            )
+            return
+        
         self.profile_videos_text.clear()
-        self.profile_videos_text.append(f"🚀 Starting download for {len(selected_urls)} profile(s)...")
+        self.profile_videos_text.append(f"[!] Starting download for {len(selected_urls)} profile(s)...")
         self.profile_progress_text.clear()
         
         # Disable buttons during processing
@@ -4903,17 +7509,35 @@ class MainWindow(QMainWindow):
         self.current_profile_index = 0
         self.total_profiles = len(selected_urls)
         self.all_profile_data = []  # Store profile name + videos for subfolder creation
+        self.profile_gathering_cancelled = False  # Track cancel state
         
         # Show progress dialog for gathering videos
         self.profile_download_dialog = ProgressDialog(self, "Gathering Profile Videos", "info")
         self.profile_download_dialog.status_label.setText(f"Processing 0/{len(selected_urls)} profiles...")
+        self.profile_download_dialog.cancel_btn.clicked.connect(self.cancel_profile_gathering)
         self.profile_download_dialog.show()
         
         # Start processing first profile
         self.process_next_profile()
     
+    def cancel_profile_gathering(self):
+        """Cancel the profile gathering process"""
+        self.profile_gathering_cancelled = True
+        if hasattr(self, 'profile_worker') and self.profile_worker and self.profile_worker.isRunning():
+            self.profile_worker.terminate()
+            self.profile_worker.wait(1000)
+        if hasattr(self, 'profile_download_dialog'):
+            self.profile_download_dialog.close()
+        self.profile_videos_text.append("\n[STOP] Profile gathering cancelled by user")
+        self.profile_info_btn.setEnabled(True)
+        self.profile_download_btn.setEnabled(True)
+    
     def process_next_profile(self):
         """Process the next profile in the queue"""
+        # Check if cancelled
+        if self.profile_gathering_cancelled:
+            return
+            
         if self.current_profile_index >= len(self.pending_profile_urls):
             # Close gathering dialog
             if hasattr(self, 'profile_download_dialog'):
@@ -4924,7 +7548,7 @@ class MainWindow(QMainWindow):
                 total_videos = sum(len(p['videos']) for p in self.all_profile_data)
                 self.total_profile_videos = total_videos  # Store for progress tracking
                 self.profile_videos_completed = 0  # Counter for completed videos
-                self.profile_videos_text.append(f"\n📥 Starting download of {total_videos} videos from {len(self.all_profile_data)} profile(s)...")
+                self.profile_videos_text.append(f"\n[DL] Starting download of {total_videos} videos from {len(self.all_profile_data)} profile(s)...")
                 
                 # Create single progress dialog for all profiles
                 self.profile_multi_dialog = MultipleProgressDialog(self, total_videos)
@@ -4937,7 +7561,7 @@ class MainWindow(QMainWindow):
                 self.total_failed = 0
                 self.download_next_profile_videos()
             else:
-                self.profile_videos_text.append("\n❌ No videos found in any profile")
+                self.profile_videos_text.append("\n[X] No videos found in any profile")
                 self.profile_info_btn.setEnabled(True)
                 self.profile_download_btn.setEnabled(True)
             return
@@ -4983,7 +7607,7 @@ class MainWindow(QMainWindow):
         self.current_profile_successful = 0
         self.current_profile_failed = 0
         
-        self.profile_progress_text.append(f"\n📁 Downloading {len(video_urls)} videos from: {profile_name}")
+        self.profile_progress_text.append(f"\n[F] Downloading {len(video_urls)} videos from: {profile_name}")
         
         # Get settings
         settings = self.get_profile_download_settings()
@@ -5082,7 +7706,7 @@ class MainWindow(QMainWindow):
         
         # Success icon and title
         title_layout = QHBoxLayout()
-        icon_label = QLabel("✅")
+        icon_label = QLabel("[OK]")
         icon_label.setStyleSheet("font-size: 32px;")
         title_label = QLabel("Profile Download Complete!")
         title_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #2ea043;")
@@ -5093,10 +7717,10 @@ class MainWindow(QMainWindow):
         
         # Stats
         stats_label = QLabel(
-            f"📊 Results:\n"
-            f"   • Profiles: {len(self.all_profile_data)}\n"
-            f"   • Successful: {self.total_successful}\n"
-            f"   • Failed: {self.total_failed}"
+            f"[G] Results:\n"
+            f"   - Profiles: {len(self.all_profile_data)}\n"
+            f"   - Successful: {self.total_successful}\n"
+            f"   - Failed: {self.total_failed}"
         )
         stats_label.setStyleSheet("font-size: 13px; color: #f0f6fc;")
         layout.addWidget(stats_label)
@@ -5106,7 +7730,7 @@ class MainWindow(QMainWindow):
         # Buttons
         btn_layout = QHBoxLayout()
         
-        open_folder_btn = QPushButton("📂 Open Folder")
+        open_folder_btn = QPushButton("Open Folder")
         open_folder_btn.setStyleSheet("""
             QPushButton {
                 background: #238636;
@@ -5167,7 +7791,7 @@ class MainWindow(QMainWindow):
         self.total_failed += failed
         
         profile_data = self.all_profile_data[self.current_download_profile_index]
-        self.profile_progress_text.append(f"   ✅ {profile_data['name']}: {successful} downloaded, {failed} failed")
+        self.profile_progress_text.append(f"   [OK] {profile_data['name']}: {successful} downloaded, {failed} failed")
         
         # Move to next profile
         self.current_download_profile_index += 1
@@ -5185,7 +7809,7 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self,
             "Profile Download Complete",
-            f"✅ Download completed!\n\n"
+            f"[OK] Download completed!\n\n"
             f"Successful: {successful}\n"
             f"Failed: {failed}\n"
             f"Total: {successful + failed}"
@@ -5195,6 +7819,10 @@ class MainWindow(QMainWindow):
     
     def handle_multi_profile_result(self, success, data):
         """Handle result from one profile in multi-profile download"""
+        # Check if cancelled
+        if hasattr(self, 'profile_gathering_cancelled') and self.profile_gathering_cancelled:
+            return
+            
         if success:
             profile_name = data.get('profile_name', 'Unknown')
             videos = data.get('videos', [])
@@ -5217,10 +7845,10 @@ class MainWindow(QMainWindow):
                     'videos': video_urls
                 })
             
-            self.profile_videos_text.append(f"   ✅ {profile_name}: {len(video_urls)} videos added")
+            self.profile_videos_text.append(f"   [OK] {profile_name}: {len(video_urls)} videos added")
         else:
             error_msg = data if isinstance(data, str) else "Unknown error"
-            self.profile_videos_text.append(f"   ❌ Error: {error_msg[:50]}")
+            self.profile_videos_text.append(f"   [X] Error: {error_msg[:50]}")
         
         # Process next profile
         self.current_profile_index += 1
@@ -5233,13 +7861,13 @@ class MainWindow(QMainWindow):
             added_count, invalid_count, problematic_count = self.profile_url_list_widget.add_urls_from_text(clipboard_text)
             
             if added_count > 0:
-                self.profile_videos_text.append(f"✅ Added {added_count} profile URL(s)")
+                self.profile_videos_text.append(f"[OK] Added {added_count} profile URL(s)")
             if invalid_count > 0:
-                self.profile_videos_text.append(f"❌ Skipped {invalid_count} invalid URL(s)")
+                self.profile_videos_text.append(f"[X] Skipped {invalid_count} invalid URL(s)")
             
             self.update_profile_url_status()
         else:
-            self.profile_videos_text.append("⚠ Clipboard is empty")
+            self.profile_videos_text.append("[!] Clipboard is empty")
     
     def update_profile_url_status(self):
         """Update the profile URL count status"""
@@ -5264,11 +7892,11 @@ class MainWindow(QMainWindow):
                 self.start_profile_download_with_settings(data, settings)
             else:
                 self.profile_videos_text.clear()
-                self.profile_videos_text.append(f"❌ No videos found in profile: {profile_name}")
+                self.profile_videos_text.append(f"[X] No videos found in profile: {profile_name}")
         else:
             error_msg = data if isinstance(data, str) else "Failed to get profile information"
             self.profile_videos_text.clear()
-            self.profile_videos_text.append(f"❌ Failed to get profile info:")
+            self.profile_videos_text.append(f"[X] Failed to get profile info:")
             self.profile_videos_text.append(f"Error: {error_msg}")
     
     def start_profile_download_with_settings(self, profile_data, settings):
@@ -5276,9 +7904,12 @@ class MainWindow(QMainWindow):
         videos = profile_data.get('videos', [])
         max_videos = settings['max_videos']
         
-        # Limit videos if specified
-        if max_videos and len(videos) > max_videos:
-            videos = videos[:max_videos]
+        # Apply 3x buffer to account for Facebook's high failure rate
+        # The downloader will stop when it reaches the target successful downloads
+        if max_videos:
+            buffer_count = int(max_videos * 3)
+            if len(videos) > buffer_count:
+                videos = videos[:buffer_count]
         
         # Extract URLs from video data
         video_urls = [video['url'] for video in videos if video.get('url')]
@@ -5304,22 +7935,25 @@ class MainWindow(QMainWindow):
         self.dl.output_dir = output_dir
         
         self.profile_progress_text.clear()
-        self.profile_progress_text.append(f"🚀 Starting download of {len(video_urls)} videos from: {profile_name}")
-        self.profile_progress_text.append(f"📁 Saving to: {output_dir}")
+        self.profile_progress_text.append(f"[!] Starting download of up to {max_videos if max_videos else len(video_urls)} videos from: {profile_name}")
+        self.profile_progress_text.append(f"   (Prepared {len(video_urls)} URLs to handle potential failures)")
+        self.profile_progress_text.append(f"[F] Saving to: {output_dir}")
         self.profile_progress_text.append("")
         
-        # Create download settings for the worker
+        # Create download settings for the worker - include target_success
         download_settings = {
             'quality': settings['quality'],
             'audio': settings['audio'],
             'subtitle': settings['subtitle'],
             'format': settings['format'],
             'convert': settings['convert'],
-            'use_caption': True
+            'use_caption': True,
+            'target_success': max_videos  # Stop when we reach this many successful downloads
         }
         
-        # Create and show progress dialog
-        self.profile_multi_progress_dialog = MultipleProgressDialog(self, len(video_urls))
+        # Create and show progress dialog - show target count, not buffer count
+        display_count = max_videos if max_videos else len(video_urls)
+        self.profile_multi_progress_dialog = MultipleProgressDialog(self, display_count)
         self.profile_multi_progress_dialog.setWindowTitle("Profile Download Progress")
         self.profile_multi_progress_dialog.show()
         
@@ -5362,10 +7996,10 @@ class MainWindow(QMainWindow):
         self.profile_progress_text.append("")
         self.profile_progress_text.append("=" * 50)
         if summary.get('stopped'):
-            self.profile_progress_text.append(f"⏹ Profile download stopped: {completed}/{total} completed, {failed} failed")
+            self.profile_progress_text.append(f"[STOP] Profile download stopped: {completed}/{total} completed, {failed} failed")
             self.profile_status_label.setText(f"Stopped: {completed}/{total} completed")
         else:
-            self.profile_progress_text.append(f"🎉 Profile download complete: {completed}/{total} successful, {failed} failed")
+            self.profile_progress_text.append(f"[*] Profile download complete: {completed}/{total} successful, {failed} failed")
             self.profile_status_label.setText(f"Complete: {completed}/{total} successful")
         
         # Show modern completion dialog
@@ -5377,11 +8011,11 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'profile_multi_worker'):
             if self.profile_multi_worker.paused:
                 self.profile_multi_worker.resume()
-                self.profile_multi_progress_dialog.pause_btn.setText("⏸ Pause")
+                self.profile_multi_progress_dialog.pause_btn.setText("Pause")
                 self.profile_status_label.setText("Resuming profile downloads...")
             else:
                 self.profile_multi_worker.pause()
-                self.profile_multi_progress_dialog.pause_btn.setText("▶ Resume")
+                self.profile_multi_progress_dialog.pause_btn.setText("Resume")
                 self.profile_status_label.setText("Paused")
     
     def stop_profile_downloads(self):
@@ -5390,19 +8024,19 @@ class MainWindow(QMainWindow):
             self.profile_multi_worker.stopped = True
             self.profile_multi_worker.stop()
             self.profile_status_label.setText("Stopping downloads...")
-            self.profile_log("⏹ Stopping profile downloads...")
+            self.profile_log("[STOP] Stopping profile downloads...")
             
             # Give it a moment to stop gracefully
             self.profile_multi_worker.wait(500)
             
             # Force terminate if still running
             if self.profile_multi_worker.isRunning():
-                self.profile_log("⚠️ Force stopping download thread...")
+                self.profile_log("[!] Force stopping download thread...")
                 self.profile_multi_worker.terminate()
                 self.profile_multi_worker.wait(1000)
             
             self.profile_status_label.setText("Downloads stopped")
-            self.profile_log("⏹ Profile downloads stopped by user")
+            self.profile_log("[STOP] Profile downloads stopped by user")
             
         if hasattr(self, 'profile_multi_progress_dialog') and self.profile_multi_progress_dialog:
             self.profile_multi_progress_dialog.close()
@@ -5418,13 +8052,13 @@ class MainWindow(QMainWindow):
             
             # Update the profile tab text area with summary
             self.profile_videos_text.clear()
-            self.profile_videos_text.append(f"✅ Profile: {profile_name}")
-            self.profile_videos_text.append(f"📱 Platform: {platform}")
-            self.profile_videos_text.append(f"📹 Found {total_videos} videos")
+            self.profile_videos_text.append(f"[OK] Profile: {profile_name}")
+            self.profile_videos_text.append(f"[M] Platform: {platform}")
+            self.profile_videos_text.append(f"[V] Found {total_videos} videos")
             
             if total_videos > 0:
                 self.profile_videos_text.append("")
-                self.profile_videos_text.append("� Cloick 'Download Videos' to start!")
+                self.profile_videos_text.append("[*] Click 'Download Videos' to start!")
             
             # Show modern info dialog
             info_dialog = ProfileInfoDialog(self, data)
@@ -5432,13 +8066,13 @@ class MainWindow(QMainWindow):
         else:
             error_msg = data if isinstance(data, str) else "Failed to get profile information"
             self.profile_videos_text.clear()
-            self.profile_videos_text.append(f"❌ Failed to get profile info:")
+            self.profile_videos_text.append(f"[X] Failed to get profile info:")
             self.profile_videos_text.append(f"Error: {error_msg}")
             self.profile_videos_text.append("")
-            self.profile_videos_text.append("💡 Tips:")
-            self.profile_videos_text.append("• Make sure the profile is public")
-            self.profile_videos_text.append("• Check if the URL is correct")
-            self.profile_videos_text.append("• Try copying the URL again")
+            self.profile_videos_text.append("[*] Tips:")
+            self.profile_videos_text.append("- Make sure the profile is public")
+            self.profile_videos_text.append("- Check if the URL is correct")
+            self.profile_videos_text.append("- Try copying the URL again")
     
     def handle_profile_download_result(self, success, data, progress_dialog):
         """Handle profile download result from profile tab"""
@@ -5455,18 +8089,24 @@ class MainWindow(QMainWindow):
                     settings = profile_dialog.get_download_settings()
                     self.start_profile_download(data, settings)
                 else:
-                    self.profile_videos_text.append("⏹ Download cancelled by user")
+                    self.profile_videos_text.append("[STOP] Download cancelled by user")
             else:
                 self.profile_videos_text.clear()
-                self.profile_videos_text.append(f"❌ No videos found in profile: {profile_name}")
+                self.profile_videos_text.append(f"[X] No videos found in profile: {profile_name}")
         else:
             error_msg = data if isinstance(data, str) else "Failed to get profile information"
             self.profile_videos_text.clear()
-            self.profile_videos_text.append(f"❌ Failed to get profile info:")
+            self.profile_videos_text.append(f"[X] Failed to get profile info:")
             self.profile_videos_text.append(f"Error: {error_msg}")
     
-    def start_multiple_download_with_urls(self, urls):
-        """Start multiple downloads with a provided list of URLs"""
+    def start_multiple_download_with_urls(self, urls, target_success=None):
+        """Start multiple downloads with a provided list of URLs
+        
+        Args:
+            urls: List of URLs to download
+            target_success: Optional target number of successful downloads. 
+                           If set, will stop after reaching this many successes.
+        """
         if not urls:
             return
         
@@ -5477,15 +8117,17 @@ class MainWindow(QMainWindow):
             'subtitle': self.multi_subtitle_cb.isChecked(),
             'format': self.multi_format.currentText(),
             'convert': False,
-            'use_caption': True
+            'use_caption': True,
+            'target_success': target_success  # Pass target to worker
         }
         
         # Set output directory
         self.dl.output_dir = Path(self.multi_output.text() or "downloads")
         self.dl.output_dir.mkdir(exist_ok=True)
         
-        # Create and show progress dialog
-        self.multi_progress_dialog = MultipleProgressDialog(self, len(urls))
+        # Create and show progress dialog - show target if set, otherwise total URLs
+        display_count = target_success if target_success else len(urls)
+        self.multi_progress_dialog = MultipleProgressDialog(self, display_count)
         self.multi_progress_dialog.show()
         
         # Start multiple download worker
@@ -5502,7 +8144,8 @@ class MainWindow(QMainWindow):
         self.multi_progress_dialog.cancel_btn.clicked.connect(self.stop_multiple_downloads)
         
         self.multi_worker.start()
-        self.update_multi_status(f"Downloading {len(urls)} videos...")
+        status_msg = f"Downloading up to {target_success} videos..." if target_success else f"Downloading {len(urls)} videos..."
+        self.update_multi_status(status_msg)
         
         # Update UI state
         self.multi_download_btn.setEnabled(False)
@@ -5514,6 +8157,1185 @@ class MainWindow(QMainWindow):
         folder = QFileDialog.getExistingDirectory(self, "Select Profile Download Directory")
         if folder:
             self.profile_output.setText(folder)
+    
+    # === VIDEO EDIT METHODS ===
+    
+    def browse_edit_input_folder(self):
+        """Browse for input folder containing videos"""
+        folder = QFileDialog.getExistingDirectory(self, "Select Input Folder")
+        if folder:
+            self.edit_input_folder.setText(folder)
+            self.update_edit_video_count()
+    
+    def browse_edit_input_file(self):
+        """Browse for a single video file"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Select Video File", "",
+            "Video Files (*.mp4 *.avi *.mkv *.mov *.wmv *.flv *.webm *.m4v *.mpeg *.mpg);;All Files (*)"
+        )
+        if file_path:
+            self.edit_input_folder.setText(file_path)
+            self.update_edit_video_count()
+    
+    def browse_edit_output(self):
+        """Browse for output folder"""
+        folder = QFileDialog.getExistingDirectory(self, "Select Output Folder")
+        if folder:
+            self.edit_output_folder.setText(folder)
+    
+    def update_edit_video_count(self):
+        """Update the video count label"""
+        input_path = self.edit_input_folder.text().strip()
+        if not input_path:
+            self.edit_video_count.setText("No input selected")
+            return
+            
+        path = Path(input_path)
+        if not path.exists():
+            self.edit_video_count.setText("Path does not exist")
+            return
+            
+        video_extensions = {'.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpeg', '.mpg'}
+        
+        if path.is_file():
+            # Single file selected
+            if path.suffix.lower() in video_extensions:
+                self.edit_video_count.setText(f"1 video selected: {path.name}")
+            else:
+                self.edit_video_count.setText("Selected file is not a video")
+        elif path.is_dir():
+            # Folder selected
+            videos = [f for f in path.iterdir() if f.suffix.lower() in video_extensions]
+            self.edit_video_count.setText(f"Found {len(videos)} video(s) in folder")
+        else:
+            self.edit_video_count.setText("Invalid path")
+    
+    def show_edit_settings_dialog(self):
+        """Show video edit settings dialog"""
+        dialog = VideoEditSettingsDialog(self, self._edit_settings)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self._edit_settings = dialog.get_settings()
+            # Save settings to persist
+            self.save_settings(silent=True)
+            # Update settings label
+            self.update_edit_settings_label()
+    
+    def update_edit_settings_label(self):
+        """Update the edit settings summary label"""
+        if not hasattr(self, 'edit_settings_label') or not hasattr(self, '_edit_settings'):
+            return
+        settings_summary = []
+        if self._edit_settings.get('resolution', 'Original') != 'Original':
+            settings_summary.append(self._edit_settings['resolution'].split()[0])
+        if self._edit_settings.get('enable_logo', False):
+            settings_summary.append("Logo")
+        if self._edit_settings.get('enable_trim', False):
+            settings_summary.append("Trim")
+        if self._edit_settings.get('mute_audio', False):
+            settings_summary.append("Muted")
+        if self._edit_settings.get('speed', 1.0) != 1.0:
+            settings_summary.append(f"{self._edit_settings['speed']}x")
+        if self._edit_settings.get('output_format', 'MP4 (H.264)') != 'MP4 (H.264)':
+            settings_summary.append(self._edit_settings['output_format'].split()[0])
+        
+        if settings_summary:
+            self.edit_settings_label.setText(", ".join(settings_summary))
+        else:
+            self.edit_settings_label.setText("Default settings")
+    
+    def edit_log(self, message):
+        """Add message to edit log"""
+        self.edit_log_text.append(message)
+        self.edit_log_text.verticalScrollBar().setValue(
+            self.edit_log_text.verticalScrollBar().maximum()
+        )
+        QApplication.processEvents()
+    
+    def stop_video_editing(self):
+        """Stop video editing process"""
+        self._edit_stopped = True
+        self.edit_status_label.setText("Stopping...")
+        # Don't disable stop button yet - let the process finish stopping
+
+    def show_ffmpeg_required_dialog(self):
+        """Show FFmpeg required dialog with download options"""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("FFmpeg Required")
+        dialog.setFixedSize(520, 400)
+        dialog.setStyleSheet("""
+            QDialog {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 #1a1f2e, stop:1 #0d1117);
+                color: #e6edf3;
+            }
+            QLabel { color: #e6edf3; background: transparent; }
+            QPushButton {
+                background: #238636;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 10px 20px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background: #2ea043; }
+            QPushButton#cancel {
+                background: transparent;
+                border: 1px solid #444c56;
+                color: #8b949e;
+            }
+            QPushButton#cancel:hover { border-color: #58a6ff; color: #e6edf3; }
+        """)
+        
+        layout = QVBoxLayout(dialog)
+        layout.setSpacing(12)
+        layout.setContentsMargins(25, 25, 25, 25)
+        
+        # Header with icon
+        header = QLabel("⚠️ FFmpeg Required")
+        header.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
+        header.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(header)
+        
+        # Description
+        desc = QLabel(
+            "FFmpeg is a free tool needed for video editing.\n"
+            "Follow these simple steps to install it:"
+        )
+        desc.setWordWrap(True)
+        desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        desc.setStyleSheet("color: #8b949e; font-size: 12px;")
+        layout.addWidget(desc)
+        
+        # Instructions - clearer steps
+        instructions = QLabel(
+            "Step 1: Click 'Download FFmpeg' button below\n\n"
+            "Step 2: Click the green 'ffmpeg-release-essentials.zip' link\n\n"
+            "Step 3: Extract the zip file to C:\\ffmpeg\n\n"
+            "Step 4: Add FFmpeg to Windows PATH:\n"
+            "   • Press Win+R, type 'sysdm.cpl' and press Enter\n"
+            "   • Click 'Advanced' tab → 'Environment Variables'\n"
+            "   • Under 'System variables', find 'Path' and click 'Edit'\n"
+            "   • Click 'New' and add: C:\\ffmpeg\\bin\n"
+            "   • Click OK on all windows\n\n"
+            "Step 5: Restart VIDT"
+        )
+        instructions.setStyleSheet("""
+            background: rgba(45,51,59,0.5);
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 12px;
+            color: #8b949e;
+            font-size: 11px;
+        """)
+        layout.addWidget(instructions)
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(10)
+        
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.setObjectName("cancel")
+        cancel_btn.clicked.connect(dialog.reject)
+        btn_layout.addWidget(cancel_btn)
+        
+        # Auto install button
+        auto_btn = QPushButton("Auto Install FFmpeg")
+        auto_btn.setStyleSheet("background: #58a6ff;")
+        auto_btn.clicked.connect(lambda: (dialog.accept(), self.auto_install_ffmpeg()))
+        btn_layout.addWidget(auto_btn)
+        
+        # Manual download button
+        download_btn = QPushButton("Manual Download")
+        download_btn.setObjectName("cancel")
+        download_btn.clicked.connect(lambda: (
+            QDesktopServices.openUrl(QUrl("https://www.gyan.dev/ffmpeg/builds/")),
+            dialog.accept()
+        ))
+        btn_layout.addWidget(download_btn)
+        
+        layout.addLayout(btn_layout)
+        
+        dialog.exec()
+    
+    def auto_install_ffmpeg(self):
+        """Automatically download and install FFmpeg"""
+        import zipfile
+        import shutil
+        import os
+        import requests
+        
+        # Create progress dialog
+        progress = QProgressDialog("Connecting...", "Cancel", 0, 100, self)
+        progress.setWindowTitle("Installing FFmpeg")
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setAutoClose(False)
+        progress.setAutoReset(False)
+        progress.setValue(0)
+        progress.show()
+        QApplication.processEvents()
+        
+        try:
+            # FFmpeg download URL (essentials build - smaller ~80MB)
+            url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+            
+            # Download location
+            app_dir = Path(os.environ.get('LOCALAPPDATA', os.path.expanduser('~'))) / 'VIDT'
+            app_dir.mkdir(parents=True, exist_ok=True)
+            zip_path = app_dir / 'ffmpeg.zip'
+            ffmpeg_dir = app_dir / 'ffmpeg'
+            
+            progress.setLabelText("Connecting to server...")
+            QApplication.processEvents()
+            
+            # Download with progress
+            response = requests.get(url, stream=True, timeout=30)
+            total_size = int(response.headers.get('content-length', 0))
+            downloaded = 0
+            
+            progress.setLabelText(f"Downloading FFmpeg ({total_size // 1024 // 1024}MB)...")
+            QApplication.processEvents()
+            
+            with open(zip_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=65536):  # 64KB chunks
+                    if progress.wasCanceled():
+                        zip_path.unlink(missing_ok=True)
+                        return
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if total_size > 0:
+                        percent = int((downloaded / total_size) * 60)  # 0-60% for download
+                        progress.setValue(percent)
+                        mb_done = downloaded // 1024 // 1024
+                        mb_total = total_size // 1024 // 1024
+                        progress.setLabelText(f"Downloading... {mb_done}MB / {mb_total}MB")
+                    QApplication.processEvents()
+            
+            if progress.wasCanceled():
+                zip_path.unlink(missing_ok=True)
+                return
+            
+            progress.setLabelText("Extracting files...")
+            progress.setValue(65)
+            QApplication.processEvents()
+            
+            # Extract
+            if ffmpeg_dir.exists():
+                shutil.rmtree(ffmpeg_dir)
+            
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                # Get the root folder name in zip
+                root_folder = zip_ref.namelist()[0].split('/')[0]
+                zip_ref.extractall(app_dir)
+                
+                # Rename to ffmpeg
+                extracted_dir = app_dir / root_folder
+                if extracted_dir.exists():
+                    extracted_dir.rename(ffmpeg_dir)
+            
+            progress.setValue(80)
+            QApplication.processEvents()
+            
+            # Clean up zip
+            zip_path.unlink()
+            
+            progress.setLabelText("Adding to system PATH...")
+            progress.setValue(85)
+            QApplication.processEvents()
+            
+            # Add to user PATH
+            bin_path = str(ffmpeg_dir / 'bin')
+            
+            # Update user PATH via registry
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Environment', 0, winreg.KEY_ALL_ACCESS)
+            try:
+                current_path, _ = winreg.QueryValueEx(key, 'Path')
+            except WindowsError:
+                current_path = ''
+            
+            if bin_path.lower() not in current_path.lower():
+                new_path = f"{current_path};{bin_path}" if current_path else bin_path
+                winreg.SetValueEx(key, 'Path', 0, winreg.REG_EXPAND_SZ, new_path)
+            
+            winreg.CloseKey(key)
+            
+            # Notify system of environment change
+            import ctypes
+            HWND_BROADCAST = 0xFFFF
+            WM_SETTINGCHANGE = 0x1A
+            ctypes.windll.user32.SendMessageW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, "Environment")
+            
+            # Update current process PATH
+            os.environ['PATH'] = bin_path + ';' + os.environ.get('PATH', '')
+            
+            progress.setValue(100)
+            progress.setLabelText("Complete!")
+            QApplication.processEvents()
+            
+            progress.close()
+            
+            QMessageBox.information(self, "Success", 
+                "FFmpeg installed successfully!\n\n"
+                "You can now use video editing features.\n"
+                "Please restart VIDT for best results.")
+                
+        except requests.exceptions.Timeout:
+            progress.close()
+            QMessageBox.warning(self, "Error", 
+                "Connection timed out.\n\n"
+                "Please check your internet connection and try again.")
+        except Exception as e:
+            progress.close()
+            QMessageBox.warning(self, "Error", 
+                f"Failed to install FFmpeg:\n{str(e)}\n\n"
+                "Please try manual installation.")
+    
+    def start_video_editing(self):
+        """Start batch video editing"""
+        input_path = self.edit_input_folder.text().strip()
+        output_folder = self.edit_output_folder.text().strip()
+        
+        if not input_path or not Path(input_path).exists():
+            QMessageBox.warning(self, "Error", "Please select a valid input file or folder")
+            return
+        
+        if not output_folder:
+            QMessageBox.warning(self, "Error", "Please select an output folder")
+            return
+        
+        # Create output folder
+        Path(output_folder).mkdir(parents=True, exist_ok=True)
+        
+        # Get video files - handle both single file and folder
+        video_extensions = {'.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpeg', '.mpg'}
+        input_path_obj = Path(input_path)
+        
+        if input_path_obj.is_file():
+            # Single file
+            if input_path_obj.suffix.lower() in video_extensions:
+                videos = [input_path_obj]
+            else:
+                QMessageBox.warning(self, "Error", "Selected file is not a supported video format")
+                return
+        else:
+            # Folder
+            videos = [f for f in input_path_obj.iterdir() if f.suffix.lower() in video_extensions]
+        
+        if not videos:
+            QMessageBox.warning(self, "Error", "No video files found")
+            return
+        
+        # Check FFmpeg
+        try:
+            import subprocess
+            subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            # Show dialog with download option
+            self.show_ffmpeg_required_dialog()
+            return
+        
+        # Reset UI
+        self._edit_stopped = False
+        self.edit_log_text.clear()
+        self.edit_progress_bar.setMaximum(len(videos))
+        self.edit_progress_bar.setValue(0)
+        self.start_edit_btn.setEnabled(False)
+        self.stop_edit_btn.setEnabled(True)
+        
+        self.edit_log(f"Starting edit of {len(videos)} video(s)...")
+        self.edit_log(f"Input: {input_path}")
+        self.edit_log(f"Output: {output_folder}")
+        self.edit_log("")
+        
+        successful = 0
+        failed = 0
+        
+        for i, video_path in enumerate(videos, 1):
+            if self._edit_stopped:
+                self.edit_log("\nStopped by user")
+                break
+            
+            self.edit_status_label.setText(f"Processing {i}/{len(videos)}...")
+            self.edit_progress_bar.setValue(i)
+            QApplication.processEvents()
+            
+            self.edit_log(f"[{i}/{len(videos)}] {video_path.name}")
+            
+            try:
+                result = self.process_video(video_path, output_folder)
+                if self._edit_stopped:
+                    # Don't count stopped as failed
+                    self.edit_log(f"   [!] Stopped")
+                    break
+                elif result['success']:
+                    successful += 1
+                    self.edit_log(f"   [OK] Saved: {result['output_name']}")
+                else:
+                    failed += 1
+                    self.edit_log(f"   [X] Error: {result['error']}")
+            except Exception as e:
+                if not self._edit_stopped:
+                    failed += 1
+                    self.edit_log(f"   [X] Error: {str(e)}")
+        
+        # Complete
+        self.edit_log("")
+        if self._edit_stopped:
+            self.edit_log(f"Stopped: {successful} successful, {failed} failed")
+            self.edit_status_label.setText("Stopped")
+        else:
+            self.edit_log(f"Complete: {successful} successful, {failed} failed")
+            self.edit_status_label.setText("Complete")
+        
+        self.start_edit_btn.setEnabled(True)
+        self.stop_edit_btn.setEnabled(False)
+        
+        # Show modern completion dialog
+        dialog = VideoEditCompleteDialog(self, successful, failed, output_folder, stopped=self._edit_stopped)
+        dialog.exec()
+        
+        # Reset stopped flag after dialog closes
+        self._edit_stopped = False
+    
+    def process_video(self, video_path, output_folder):
+        """Process a single video with FFmpeg"""
+        import subprocess
+        
+        settings = self._edit_settings
+        
+        # Determine output folder based on settings
+        if settings.get('same_folder', False):
+            output_path = video_path.parent
+        else:
+            output_path = Path(output_folder)
+        
+        # Determine output extension
+        format_map = {
+            'MP4 (H.264)': '.mp4',
+            'MP4 (H.265/HEVC)': '.mp4',
+            'WebM': '.webm',
+            'AVI': '.avi',
+            'MOV': '.mov',
+            'MKV': '.mkv'
+        }
+        ext = format_map.get(settings['output_format'], '.mp4')
+        
+        # Determine output filename based on settings
+        if settings.get('replace_original', False):
+            # Use temp file, then replace original
+            output_name = video_path.stem + "_temp_edit" + ext
+            output_file = output_path / output_name
+            replace_original = True
+        elif settings.get('add_suffix', True):
+            output_name = video_path.stem + "_edited" + ext
+            output_file = output_path / output_name
+            replace_original = False
+        else:
+            output_name = video_path.stem + ext
+            output_file = output_path / output_name
+            replace_original = False
+        
+        # Build FFmpeg command
+        cmd = ['ffmpeg', '-y', '-i', str(video_path)]
+        
+        # Build filter complex
+        filters = []
+        
+        # Resolution
+        if settings['resolution'] != 'Original':
+            res_map = {
+                '4K (3840x2160)': '3840:2160',
+                '2K (2560x1440)': '2560:1440',
+                '1080p (1920x1080)': '1920:1080',
+                '720p (1280x720)': '1280:720',
+                '480p (854x480)': '854:480',
+                'Custom': f"{settings['custom_width']}:{settings['custom_height']}"
+            }
+            scale = res_map.get(settings['resolution'])
+            if scale:
+                filters.append(f"scale={scale}:force_original_aspect_ratio=decrease,pad={scale.split(':')[0]}:{scale.split(':')[1]}:(ow-iw)/2:(oh-ih)/2")
+        
+        # Speed
+        if settings['speed'] != 1.0:
+            filters.append(f"setpts={1/settings['speed']}*PTS")
+        
+        # Apply video filters
+        if filters:
+            cmd.extend(['-vf', ','.join(filters)])
+        
+        # Audio filters
+        audio_filters = []
+        if settings['speed'] != 1.0:
+            audio_filters.append(f"atempo={settings['speed']}")
+        if settings['volume'] != 100:
+            audio_filters.append(f"volume={settings['volume']/100}")
+        
+        if settings['mute_audio']:
+            cmd.extend(['-an'])
+        elif audio_filters:
+            cmd.extend(['-af', ','.join(audio_filters)])
+        else:
+            # Copy audio codec if no audio filters
+            cmd.extend(['-c:a', 'copy'])
+        
+        # Trim
+        if settings['enable_trim']:
+            if settings['trim_start'] > 0:
+                cmd.extend(['-ss', str(settings['trim_start'])])
+            if settings['trim_end'] > 0:
+                cmd.extend(['-to', str(settings['trim_end'])])
+        
+        # Codec settings
+        if 'H.264' in settings['output_format']:
+            cmd.extend(['-c:v', 'libx264', '-crf', str(settings['quality_crf'])])
+        elif 'H.265' in settings['output_format']:
+            cmd.extend(['-c:v', 'libx265', '-crf', str(settings['quality_crf'])])
+        elif 'WebM' in settings['output_format']:
+            cmd.extend(['-c:v', 'libvpx-vp9', '-crf', str(settings['quality_crf']), '-b:v', '0'])
+        
+        # Add logo/watermark
+        if settings['enable_logo']:
+            watermark_type = settings.get('watermark_type', 'Image')
+            pos_map = {
+                'Top-Left': '10:10',
+                'Top-Right': 'W-w-10:10',
+                'Bottom-Left': '10:H-h-10',
+                'Bottom-Right': 'W-w-10:H-h-10',
+                'Center': '(W-w)/2:(H-h)/2'
+            }
+            pos = pos_map.get(settings['logo_position'], 'W-w-10:H-h-10')
+            opacity = settings['logo_opacity'] / 100
+            
+            if watermark_type == 'Text' and settings.get('watermark_text'):
+                # Text watermark using drawtext filter
+                text = settings['watermark_text'].replace("'", "\\'").replace(":", "\\:")
+                font_size = settings.get('text_font_size', 48)
+                text_color = settings.get('text_color', '#FFFFFF').lstrip('#')
+                
+                # Get animation settings
+                animation = settings.get('watermark_animation', 'None')
+                anim_duration = settings.get('animation_duration', 1.0)
+                
+                # Convert hex color to FFmpeg format with opacity
+                alpha_hex = hex(int(opacity * 255))[2:].zfill(2)
+                fontcolor = f"{text_color}@{opacity}"
+                
+                # Position mapping for drawtext (different from overlay)
+                text_pos_map = {
+                    'Top-Left': 'x=10:y=10',
+                    'Top-Right': 'x=w-tw-10:y=10',
+                    'Bottom-Left': 'x=10:y=h-th-10',
+                    'Bottom-Right': 'x=w-tw-10:y=h-th-10',
+                    'Center': 'x=(w-tw)/2:y=(h-th)/2'
+                }
+                base_pos = text_pos_map.get(settings['logo_position'], 'x=w-tw-10:y=h-th-10')
+                
+                # Build drawtext filter with animation
+                if animation == 'Fade In':
+                    # Fade in from transparent to full opacity
+                    alpha_expr = f"if(lt(t,{anim_duration}),{opacity}*t/{anim_duration},{opacity})"
+                    text_filter = f"drawtext=text='{text}':fontsize={font_size}:fontcolor={text_color}@%{{eif\\:{alpha_expr}\\:d}}:{base_pos}"
+                elif animation == 'Fade In/Out':
+                    # Fade in at start, fade out at end (last 2 seconds)
+                    alpha_expr = f"if(lt(t,{anim_duration}),{opacity}*t/{anim_duration},if(gt(t,duration-{anim_duration}),{opacity}*(duration-t)/{anim_duration},{opacity}))"
+                    text_filter = f"drawtext=text='{text}':fontsize={font_size}:fontcolor={text_color}:{base_pos}:alpha='{alpha_expr}'"
+                elif animation == 'Slide In Left':
+                    x_expr = f"if(lt(t,{anim_duration}),-tw+((w-tw-10+tw)*t/{anim_duration}),w-tw-10)" if 'Right' in settings['logo_position'] else f"if(lt(t,{anim_duration}),-tw+(10+tw)*t/{anim_duration},10)"
+                    y_part = base_pos.split(':')[1] if ':' in base_pos else 'y=10'
+                    text_filter = f"drawtext=text='{text}':fontsize={font_size}:fontcolor={fontcolor}:x='{x_expr}':{y_part}"
+                elif animation == 'Slide In Right':
+                    x_expr = f"if(lt(t,{anim_duration}),w-((w-10)*t/{anim_duration}),10)" if 'Left' in settings['logo_position'] else f"if(lt(t,{anim_duration}),w-((10+tw)*t/{anim_duration}),w-tw-10)"
+                    y_part = base_pos.split(':')[1] if ':' in base_pos else 'y=10'
+                    text_filter = f"drawtext=text='{text}':fontsize={font_size}:fontcolor={fontcolor}:x='{x_expr}':{y_part}"
+                elif animation == 'Slide In Top':
+                    x_part = base_pos.split(':')[0] if ':' in base_pos else 'x=10'
+                    y_target = '10' if 'Top' in settings['logo_position'] else 'h-th-10'
+                    y_expr = f"if(lt(t,{anim_duration}),-th+({y_target}+th)*t/{anim_duration},{y_target})"
+                    text_filter = f"drawtext=text='{text}':fontsize={font_size}:fontcolor={fontcolor}:{x_part}:y='{y_expr}'"
+                elif animation == 'Slide In Bottom':
+                    x_part = base_pos.split(':')[0] if ':' in base_pos else 'x=10'
+                    y_target = '10' if 'Top' in settings['logo_position'] else 'h-th-10'
+                    y_expr = f"if(lt(t,{anim_duration}),h-(h-{y_target})*t/{anim_duration},{y_target})"
+                    text_filter = f"drawtext=text='{text}':fontsize={font_size}:fontcolor={fontcolor}:{x_part}:y='{y_expr}'"
+                elif animation == 'Zoom In':
+                    # Zoom from small to full size
+                    size_expr = f"if(lt(t,{anim_duration}),{font_size}*t/{anim_duration},{font_size})"
+                    text_filter = f"drawtext=text='{text}':fontsize='{size_expr}':fontcolor={fontcolor}:{base_pos}"
+                elif animation == 'Pulse':
+                    # Pulsing opacity effect
+                    alpha_expr = f"{opacity}*(0.5+0.5*sin(t*3.14159))"
+                    text_filter = f"drawtext=text='{text}':fontsize={font_size}:fontcolor={text_color}:{base_pos}:alpha='{alpha_expr}'"
+                else:
+                    # No animation
+                    text_filter = f"drawtext=text='{text}':fontsize={font_size}:fontcolor={fontcolor}:{base_pos}"
+                
+                if filters:
+                    filters.append(text_filter)
+                else:
+                    filters = [text_filter]
+                
+                # Apply all filters
+                if filters:
+                    cmd.extend(['-vf', ','.join(filters)])
+                    
+            elif watermark_type == 'Image' and settings.get('logo_path') and Path(settings['logo_path']).exists():
+                # Image watermark
+                scale_pct = settings['logo_scale'] / 100
+                logo_shape = settings.get('logo_shape', 'None')
+                animation = settings.get('watermark_animation', 'None')
+                anim_duration = settings.get('animation_duration', 1.0)
+                logo_path = settings['logo_path']
+                
+                # Check if logo is an animated GIF
+                is_animated_gif = logo_path.lower().endswith('.gif')
+                
+                # Rebuild command with logo
+                # For animated GIFs: use -stream_loop -1 to loop infinitely before the input
+                if is_animated_gif:
+                    # -stream_loop -1 must come before -i for the file to loop
+                    cmd = ['ffmpeg', '-y', '-i', str(video_path), '-ignore_loop', '0', '-stream_loop', '-1', '-i', logo_path]
+                else:
+                    cmd = ['ffmpeg', '-y', '-i', str(video_path), '-i', logo_path]
+                
+                # Build base logo processing (scale and shape)
+                if logo_shape == 'Circle':
+                    logo_base = f"[1:v]scale=iw*{scale_pct}:-1,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(gt(pow(X-W/2,2)+pow(Y-H/2,2),pow(min(W,H)/2,2)),0,alpha(X,Y))'"
+                elif logo_shape == 'Rounded':
+                    logo_base = f"[1:v]scale=iw*{scale_pct}:-1,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(gt(pow(max(0,abs(X-W/2)-W/2+min(W,H)*0.15),2)+pow(max(0,abs(Y-H/2)-H/2+min(W,H)*0.15),2),pow(min(W,H)*0.15,2)),0,alpha(X,Y))'"
+                elif logo_shape == 'Square':
+                    logo_base = f"[1:v]scale=iw*{scale_pct}:-1,crop='min(iw,ih)':'min(iw,ih)',format=rgba"
+                elif logo_shape == 'Triangle':
+                    logo_base = f"[1:v]scale=iw*{scale_pct}:-1,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lt(Y,H*(1-abs(X-W/2)/(W/2))),alpha(X,Y),0)'"
+                else:
+                    logo_base = f"[1:v]scale=iw*{scale_pct}:-1,format=rgba"
+                
+                # For animated GIFs, use shortest=1 to end when main video ends
+                overlay_opts = ":shortest=1" if is_animated_gif else ""
+                
+                # Build overlay position with animation
+                if animation == 'Fade In':
+                    alpha_expr = f"if(lt(t,{anim_duration}),{opacity}*t/{anim_duration},{opacity})"
+                    logo_filter = f"{logo_base},colorchannelmixer=aa={opacity}[logo];[0:v][logo]overlay={pos}:format=auto:alpha=premultiplied:enable='gte(t,0)'"
+                    # Use fade filter for smoother fade
+                    logo_filter = f"{logo_base}[logotmp];[logotmp]fade=t=in:st=0:d={anim_duration}:alpha=1,colorchannelmixer=aa={opacity}[logo];[0:v][logo]overlay={pos}{overlay_opts}"
+                elif animation == 'Fade In/Out':
+                    logo_filter = f"{logo_base}[logotmp];[logotmp]fade=t=in:st=0:d={anim_duration}:alpha=1,fade=t=out:st=9999:d={anim_duration}:alpha=1,colorchannelmixer=aa={opacity}[logo];[0:v][logo]overlay={pos}{overlay_opts}"
+                elif animation == 'Slide In Left':
+                    # Slide from left edge
+                    if 'Right' in settings['logo_position']:
+                        x_expr = f"if(lt(t,{anim_duration}),-overlay_w+(W-overlay_w-10+overlay_w)*t/{anim_duration},W-overlay_w-10)"
+                    else:
+                        x_expr = f"if(lt(t,{anim_duration}),-overlay_w+(10+overlay_w)*t/{anim_duration},10)"
+                    y_val = '10' if 'Top' in settings['logo_position'] else ('(H-overlay_h)/2' if 'Center' in settings['logo_position'] else 'H-overlay_h-10')
+                    logo_filter = f"{logo_base},colorchannelmixer=aa={opacity}[logo];[0:v][logo]overlay=x='{x_expr}':y={y_val}{overlay_opts}"
+                elif animation == 'Slide In Right':
+                    # Slide from right edge
+                    if 'Left' in settings['logo_position']:
+                        x_expr = f"if(lt(t,{anim_duration}),W-(W-10)*t/{anim_duration},10)"
+                    else:
+                        x_expr = f"if(lt(t,{anim_duration}),W-(W-W+overlay_w+10)*t/{anim_duration},W-overlay_w-10)"
+                    y_val = '10' if 'Top' in settings['logo_position'] else ('(H-overlay_h)/2' if 'Center' in settings['logo_position'] else 'H-overlay_h-10')
+                    logo_filter = f"{logo_base},colorchannelmixer=aa={opacity}[logo];[0:v][logo]overlay=x='{x_expr}':y={y_val}{overlay_opts}"
+                elif animation == 'Slide In Top':
+                    # Slide from top
+                    x_val = '10' if 'Left' in settings['logo_position'] else ('(W-overlay_w)/2' if 'Center' in settings['logo_position'] else 'W-overlay_w-10')
+                    if 'Bottom' in settings['logo_position']:
+                        y_expr = f"if(lt(t,{anim_duration}),-overlay_h+(H-overlay_h-10+overlay_h)*t/{anim_duration},H-overlay_h-10)"
+                    else:
+                        y_expr = f"if(lt(t,{anim_duration}),-overlay_h+(10+overlay_h)*t/{anim_duration},10)"
+                    logo_filter = f"{logo_base},colorchannelmixer=aa={opacity}[logo];[0:v][logo]overlay=x={x_val}:y='{y_expr}'{overlay_opts}"
+                elif animation == 'Slide In Bottom':
+                    # Slide from bottom
+                    x_val = '10' if 'Left' in settings['logo_position'] else ('(W-overlay_w)/2' if 'Center' in settings['logo_position'] else 'W-overlay_w-10')
+                    if 'Top' in settings['logo_position']:
+                        y_expr = f"if(lt(t,{anim_duration}),H-(H-10)*t/{anim_duration},10)"
+                    else:
+                        y_expr = f"if(lt(t,{anim_duration}),H-(H-H+overlay_h+10)*t/{anim_duration},H-overlay_h-10)"
+                    logo_filter = f"{logo_base},colorchannelmixer=aa={opacity}[logo];[0:v][logo]overlay=x={x_val}:y='{y_expr}'{overlay_opts}"
+                elif animation == 'Zoom In':
+                    # Zoom from small to full size
+                    scale_expr = f"if(lt(t,{anim_duration}),iw*{scale_pct}*t/{anim_duration},iw*{scale_pct})"
+                    logo_filter = f"[1:v]scale=w='{scale_expr}':h=-1,format=rgba,colorchannelmixer=aa={opacity}[logo];[0:v][logo]overlay={pos}{overlay_opts}"
+                elif animation == 'Pulse':
+                    # Pulsing effect using opacity
+                    pulse_opacity = f"{opacity}*(0.6+0.4*sin(t*3.14159*2))"
+                    logo_filter = f"{logo_base}[logotmp];[logotmp]colorchannelmixer=aa='{pulse_opacity}'[logo];[0:v][logo]overlay={pos}{overlay_opts}"
+                else:
+                    # No animation
+                    logo_filter = f"{logo_base},colorchannelmixer=aa={opacity}[logo];[0:v][logo]overlay={pos}{overlay_opts}"
+                
+                if filters:
+                    cmd.extend(['-filter_complex', f"{logo_filter},{','.join(filters)}"])
+                else:
+                    cmd.extend(['-filter_complex', logo_filter])
+                
+                # Re-add audio settings for image watermark path
+                if settings['mute_audio']:
+                    cmd.extend(['-an'])
+                elif audio_filters:
+                    cmd.extend(['-af', ','.join(audio_filters)])
+                else:
+                    cmd.extend(['-c:a', 'copy'])
+                
+                # Re-add codec settings
+                if 'H.264' in settings['output_format']:
+                    cmd.extend(['-c:v', 'libx264', '-crf', str(settings['quality_crf'])])
+                elif 'H.265' in settings['output_format']:
+                    cmd.extend(['-c:v', 'libx265', '-crf', str(settings['quality_crf'])])
+                elif 'WebM' in settings['output_format']:
+                    cmd.extend(['-c:v', 'libvpx-vp9', '-crf', str(settings['quality_crf']), '-b:v', '0'])
+        
+        # Copy all subtitle streams and metadata
+        cmd.extend(['-c:s', 'copy'])  # Copy subtitle streams
+        cmd.extend(['-map_metadata', '0'])  # Copy metadata from input
+        
+        cmd.append(str(output_file))
+        
+        # Run FFmpeg with Popen for interruptible processing
+        try:
+            import time
+            import os
+            
+            # On Windows, use CREATE_NEW_PROCESS_GROUP for better termination
+            creation_flags = 0
+            if hasattr(subprocess, 'CREATE_NO_WINDOW'):
+                creation_flags |= subprocess.CREATE_NO_WINDOW
+            if hasattr(subprocess, 'CREATE_NEW_PROCESS_GROUP'):
+                creation_flags |= subprocess.CREATE_NEW_PROCESS_GROUP
+            
+            process = subprocess.Popen(
+                cmd, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE,
+                creationflags=creation_flags
+            )
+            
+            # Store process reference for stopping
+            self._current_ffmpeg_process = process
+            
+            # Read stderr in non-blocking way to show progress
+            import threading
+            import queue
+            
+            stderr_queue = queue.Queue()
+            last_progress = ""
+            
+            def read_stderr():
+                try:
+                    for line in iter(process.stderr.readline, b''):
+                        if line:
+                            stderr_queue.put(line.decode('utf-8', errors='replace'))
+                except:
+                    pass
+            
+            stderr_thread = threading.Thread(target=read_stderr, daemon=True)
+            stderr_thread.start()
+            
+            # Poll process and check for stop flag
+            while process.poll() is None:
+                if self._edit_stopped:
+                    # Force kill on Windows
+                    try:
+                        if os.name == 'nt':
+                            # Windows: use taskkill for reliable termination
+                            subprocess.run(['taskkill', '/F', '/T', '/PID', str(process.pid)], 
+                                         capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+                        else:
+                            process.terminate()
+                            process.wait(timeout=2)
+                    except:
+                        try:
+                            process.kill()
+                        except:
+                            pass
+                    
+                    # Clean up partial output file
+                    if output_file.exists():
+                        try:
+                            time.sleep(0.5)  # Wait for file handle release
+                            os.remove(str(output_file))
+                        except:
+                            pass
+                    self._current_ffmpeg_process = None
+                    return {'success': False, 'error': 'Stopped by user'}
+                
+                # Check for progress updates from FFmpeg
+                try:
+                    while True:
+                        line = stderr_queue.get_nowait()
+                        if 'time=' in line:
+                            # Extract time progress
+                            import re
+                            match = re.search(r'time=(\d+:\d+:\d+\.\d+)', line)
+                            if match:
+                                progress_time = match.group(1)
+                                if progress_time != last_progress:
+                                    last_progress = progress_time
+                                    self.edit_status_label.setText(f"Encoding: {progress_time}")
+                except queue.Empty:
+                    pass
+                
+                time.sleep(0.05)  # Faster polling
+                QApplication.processEvents()
+            
+            self._current_ffmpeg_process = None
+            
+            # Collect remaining stderr
+            remaining_stderr = b''
+            try:
+                remaining_stderr = process.stderr.read()
+            except:
+                pass
+            
+            # Get result
+            stdout, stderr = process.communicate()
+            
+            if process.returncode == 0:
+                # Handle replace original option
+                if replace_original:
+                    try:
+                        original_path = str(video_path)
+                        # Delete original
+                        os.remove(original_path)
+                        # Rename temp to original name (with new extension)
+                        final_name = video_path.stem + ext
+                        final_path = video_path.parent / final_name
+                        os.rename(str(output_file), str(final_path))
+                        return {'success': True, 'output_name': final_name}
+                    except Exception as e:
+                        return {'success': False, 'error': f'Failed to replace original: {str(e)}'}
+                return {'success': True, 'output_name': output_name}
+            else:
+                error_msg = stderr.decode('utf-8', errors='replace')[:200] if stderr else 'Unknown error'
+                return {'success': False, 'error': error_msg}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    # === IMAGE DOWNLOAD METHODS ===
+    
+    def browse_image_output(self):
+        """Browse for image output directory"""
+        folder = QFileDialog.getExistingDirectory(self, "Select Image Download Directory")
+        if folder:
+            self.image_output.setText(folder)
+    
+    def paste_image_urls(self):
+        """Paste image URLs from clipboard"""
+        clipboard = QApplication.clipboard()
+        text = clipboard.text()
+        if text:
+            added, invalid, problematic = self.image_url_list_widget.add_urls_from_text(text)
+            self.update_image_url_status()
+            
+            if added > 0:
+                self.image_log(f"[OK] Added {added} image URL(s)")
+            if invalid > 0:
+                self.image_log(f"[!] Skipped {invalid} invalid URL(s)")
+        else:
+            QMessageBox.information(self, "Info", "Clipboard is empty")
+    
+    def update_image_url_status(self):
+        """Update the image URL status label"""
+        total = len(self.image_url_list_widget.urls)
+        selected = len(self.image_url_list_widget.get_selected_urls())
+        
+        if total == 0:
+            self.image_url_status.setText("No image URLs added")
+        else:
+            self.image_url_status.setText(f"{selected}/{total} selected")
+    
+    def image_log(self, message):
+        """Log message to image progress text"""
+        self.image_progress_text.append(message)
+        # Auto-scroll to bottom
+        scrollbar = self.image_progress_text.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+        QApplication.processEvents()
+    
+    def download_images(self):
+        """Download images from URL list"""
+        if not IMAGE_DOWNLOADER_AVAILABLE:
+            QMessageBox.warning(self, "Error", 
+                "Image downloader module not available.\n\n"
+                "Please ensure image_downloader.py is in the same directory.")
+            return
+        
+        # Get URLs from list widget
+        urls = self.image_url_list_widget.get_selected_urls()
+        if not urls:
+            QMessageBox.warning(self, "Warning", "Please add and select image URLs to download")
+            return
+        
+        # Get output directory
+        output_dir = self.image_output.text().strip() or "downloads/images"
+        
+        # Reset stop flag
+        self.image_download_stopped = False
+        
+        # Create modern progress dialog
+        progress_dialog = ImageDownloadProgressDialog(self, len(urls))
+        progress_dialog.show()
+        
+        # Setup UI
+        self.image_progress_text.clear()
+        self.image_progress_bar.setValue(0)
+        self.image_progress_bar.setMaximum(len(urls))
+        self.image_status_label.setText(f"Downloading {len(urls)} images...")
+        self.image_stats_label.setText("")
+        self.image_download_btn.setEnabled(False)
+        self.image_stop_btn.setEnabled(True)
+        
+        # Create downloader
+        try:
+            downloader = ImageDownloader(output_dir)
+            
+            successful = 0
+            failed = 0
+            skipped = 0
+            
+            for i, url in enumerate(urls, 1):
+                if self.image_download_stopped or progress_dialog.cancelled:
+                    self.image_log("Stopped by user")
+                    break
+                
+                # Update progress dialog
+                progress_dialog.update_progress(i, url, successful, failed)
+                
+                # Update progress
+                self.image_progress_bar.setValue(i)
+                self.image_stats_label.setText(f"{successful} saved | {failed} failed")
+                self.image_status_label.setText(f"Downloading {i}/{len(urls)}...")
+                QApplication.processEvents()
+                
+                # Determine subfolder by platform (use saved option)
+                subfolder = None
+                if self._image_subfolder:
+                    platform = downloader.detect_platform(url)
+                    if platform not in ['unknown', 'direct']:
+                        subfolder = platform.capitalize()
+                
+                # Download
+                self.image_log(f"[{i}/{len(urls)}] {url[:60]}...")
+                result = downloader.download_image(
+                    url, 
+                    subfolder=subfolder, 
+                    callback=self.image_log,
+                    pinterest_max=self._image_pinterest_max
+                )
+                
+                if result['success']:
+                    # Handle batch results (e.g., Pinterest search URLs)
+                    if 'downloaded' in result:
+                        successful += result.get('downloaded', 0)
+                        failed += result.get('failed', 0)
+                        if result.get('message'):
+                            self.image_log(result['message'])
+                    else:
+                        # Single image result
+                        # Check min size filter
+                        file_size = result.get('size', 0)
+                        if self._image_min_size > 0 and file_size < self._image_min_size * 1024:
+                            skipped += 1
+                            self.image_log(f"Skipped (too small): {file_size/1024:.1f}KB")
+                        elif result.get('skipped'):
+                            skipped += 1
+                        else:
+                            successful += 1
+                else:
+                    failed += 1
+                
+                # Process events to keep UI responsive
+                QApplication.processEvents()
+            
+            # Close progress dialog
+            progress_dialog.close()
+            
+            # Final summary
+            self.image_log("")
+            self.image_log(f"Complete: {successful} saved, {failed} failed, {skipped} skipped")
+            self.image_status_label.setText("Download complete")
+            self.image_stats_label.setText(f"{successful} saved | {failed} failed | {skipped} skipped")
+            self.image_progress_bar.setValue(len(urls))
+            
+            downloader.close()
+            
+            # Show modern finish dialog
+            was_cancelled = self.image_download_stopped or progress_dialog.cancelled
+            complete_dialog = ImageDownloadCompleteDialog(
+                self, successful, failed, skipped, output_dir, was_cancelled
+            )
+            complete_dialog.exec()
+            
+        except Exception as e:
+            progress_dialog.close()
+            self.image_log(f"Error: {str(e)}")
+            self.image_status_label.setText("Error occurred")
+            QMessageBox.critical(self, "Download Error", f"An error occurred during download:\n\n{str(e)}")
+        
+        finally:
+            self.image_download_btn.setEnabled(True)
+            self.image_stop_btn.setEnabled(False)
+    
+    def search_and_download_images(self):
+        """Search for images and download them"""
+        if not IMAGE_DOWNLOADER_AVAILABLE:
+            QMessageBox.warning(self, "Error", 
+                "Image downloader module not available.\n\n"
+                "Please ensure image_downloader.py is in the same directory.")
+            return
+        
+        query = self.image_search_input.text().strip()
+        if not query:
+            QMessageBox.warning(self, "Warning", "Please enter a search query")
+            return
+        
+        platform_text = self.image_search_platform.currentText()
+        platform = 'google' if 'Google' in platform_text else 'pinterest'
+        max_images = self.image_search_max.value()
+        output_dir = self.image_output.text().strip() or "downloads/images"
+        
+        # Clear progress
+        self.image_progress_text.clear()
+        self.image_status_label.setText(f"Searching for '{query}'...")
+        self.image_search_btn.setEnabled(False)
+        
+        try:
+            downloader = ImageDownloader(output_dir)
+            
+            self.image_log(f"[?] Searching {platform_text} for '{query}'...")
+            self.image_log(f"[G] Max images: {max_images}")
+            QApplication.processEvents()
+            
+            result = downloader.search_and_download(query, platform, max_images, callback=self.image_log)
+            
+            if result.get('success', False) or result.get('successful', 0) > 0:
+                self.image_log("")
+                self.image_log(f"[OK] Search complete!")
+                self.image_status_label.setText(f"Done: {result.get('successful', 0)} images saved")
+            else:
+                error = result.get('error', 'Unknown error')
+                self.image_log(f"[X] Search failed: {error}")
+                self.image_status_label.setText("Search failed")
+                
+                if 'Selenium' in error:
+                    self.image_log("")
+                    self.image_log("[*] Tip: Install Selenium for search feature:")
+                    self.image_log("   pip install selenium webdriver-manager")
+            
+            downloader.close()
+            
+        except Exception as e:
+            self.image_log(f"[X] Error: {str(e)}")
+            self.image_status_label.setText("Error occurred")
+        
+        finally:
+            self.image_search_btn.setEnabled(True)
+    
+    def extract_images_from_page(self):
+        """Extract all images from a webpage"""
+        if not IMAGE_DOWNLOADER_AVAILABLE:
+            QMessageBox.warning(self, "Error", 
+                "Image downloader module not available.\n\n"
+                "Please ensure image_downloader.py is in the same directory.")
+            return
+        
+        page_url = self.image_page_input.text().strip()
+        if not page_url:
+            QMessageBox.warning(self, "Warning", "Please enter a page URL")
+            return
+        
+        if not page_url.startswith(('http://', 'https://')):
+            page_url = 'https://' + page_url
+        
+        # Clear progress
+        self.image_progress_text.clear()
+        self.image_status_label.setText("Extracting images from page...")
+        self.image_extract_btn.setEnabled(False)
+        
+        try:
+            downloader = ImageDownloader()
+            
+            self.image_log(f"[?] Scanning page: {page_url}")
+            QApplication.processEvents()
+            
+            image_urls = downloader.extract_images_from_page(page_url, callback=self.image_log)
+            
+            if image_urls:
+                self.image_log(f"[OK] Found {len(image_urls)} images")
+                self.image_log("")
+                
+                # Ask user if they want to add to download list
+                reply = QMessageBox.question(
+                    self, 
+                    "Images Found",
+                    f"Found {len(image_urls)} images on the page.\n\n"
+                    f"Add them to the download list?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                
+                if reply == QMessageBox.StandardButton.Yes:
+                    # Add URLs to the list
+                    added = 0
+                    for url in image_urls:
+                        result = self.image_url_list_widget.add_urls_from_text(url)
+                        added += result[0]
+                    
+                    self.update_image_url_status()
+                    self.image_log(f"[OK] Added {added} images to download list")
+                    self.image_status_label.setText(f"Added {added} images to list")
+            else:
+                self.image_log("[X] No images found on page")
+                self.image_status_label.setText("No images found")
+            
+            downloader.close()
+            
+        except Exception as e:
+            self.image_log(f"[X] Error: {str(e)}")
+            self.image_status_label.setText("Error occurred")
+        
+        finally:
+            self.image_extract_btn.setEnabled(True)
+    
+    def style_spinbox(self, spinbox):
+        """Style a spinbox widget"""
+        spinbox.setStyleSheet("""
+            QSpinBox {
+                background: #21262d;
+                color: #f0f6fc;
+                border: 1px solid #30363d;
+                border-radius: 6px;
+                padding: 4px 8px;
+                font-size: 12px;
+            }
+            QSpinBox:hover {
+                border-color: #58a6ff;
+            }
+            QSpinBox:focus {
+                border-color: #58a6ff;
+                background: #161b22;
+            }
+            QSpinBox::up-button, QSpinBox::down-button {
+                background: #30363d;
+                border: none;
+                width: 16px;
+            }
+            QSpinBox::up-button:hover, QSpinBox::down-button:hover {
+                background: #58a6ff;
+            }
+            QSpinBox::up-arrow {
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-bottom: 4px solid #f0f6fc;
+            }
+            QSpinBox::down-arrow {
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 4px solid #f0f6fc;
+            }
+        """)
     
     def get_profile_download_settings(self):
         """Get profile download settings from the UI"""
@@ -5594,6 +9416,33 @@ class MainWindow(QMainWindow):
             return '/video/' in clean_url
         return False
     
+    def is_facebook_single_video_url(self, url):
+        """Check if URL is a Facebook single video URL (not a profile URL)"""
+        url_lower = url.lower()
+        
+        # Single video patterns
+        single_video_patterns = [
+            '/share/r/',      # Share reel links
+            '/share/v/',      # Share video links
+            '/watch/?v=',     # Watch page with video ID
+            '/watch?v=',      # Watch page with video ID (no trailing ?)
+            'fb.watch/',      # Short video links
+            '/video.php',     # Old video links
+            '/reel/',         # Direct reel links (but not /reels/ which is profile)
+        ]
+        
+        # Check for single video patterns
+        for pattern in single_video_patterns:
+            if pattern in url_lower:
+                return True
+        
+        # Check for /videos/ with a video ID (e.g., /videos/123456789)
+        import re
+        if re.search(r'/videos/\d{5,}', url_lower):
+            return True
+        
+        return False
+    
     def handle_progress_dialog_close(self, result):
         """Handle when progress dialog is closed (including cancel)"""
         if hasattr(self, 'progress_dialog') and self.progress_dialog.cancelled:
@@ -5608,7 +9457,7 @@ class MainWindow(QMainWindow):
             self.info_btn.setEnabled(True)
             self.update_title_status("Cancelled", "#ffaa00")
             self.update_download_status("Operation cancelled by user", "#ffaa00")
-            self.log("⏹ Operation cancelled by user")
+            self.log("[STOP] Operation cancelled by user")
 
     def update_progress(self, percentage, message=""):
         """Update progress bar with percentage and optional message"""
@@ -5674,7 +9523,7 @@ class MainWindow(QMainWindow):
         
         # Only log non-empty messages to avoid clutter
         if msg.strip():
-            self.log(f"{'✓' if ok else '✗'} {msg}")
+            self.log(f"{'[OK]' if ok else '[X]'} {msg}")
         
         # Update title bar status and download status
         if ok:
@@ -5725,7 +9574,7 @@ class MainWindow(QMainWindow):
         try:
             # Debug: Check what's actually in settings
             stored_dir = self.settings.value("output_directory", "downloads")
-            self.log(f"🔍 Raw stored directory: '{stored_dir}'")
+            self.log(f"[?] Raw stored directory: '{stored_dir}'")
             
             # Window geometry and position
             geometry = self.settings.value("geometry")
@@ -5766,7 +9615,7 @@ class MainWindow(QMainWindow):
             
             # Output directory
             output_dir = self.settings.value("output_directory", "downloads")
-            self.log(f"📁 About to set output field to: '{output_dir}'")
+            self.log(f"[F] About to set output field to: '{output_dir}'")
             
             # Ensure the output field exists and is ready
             if hasattr(self, 'output') and self.output is not None:
@@ -5775,11 +9624,11 @@ class MainWindow(QMainWindow):
                 self.output.repaint()
                 # Verify it was actually set
                 actual_text = self.output.text()
-                self.log(f"📁 Output field now shows: '{actual_text}'")
+                self.log(f"[F] Output field now shows: '{actual_text}'")
                 self.dl.output_dir = Path(output_dir)
-                self.log(f"📁 VideoDownloader output_dir set to: {self.dl.output_dir}")
+                self.log(f"[F] VideoDownloader output_dir set to: {self.dl.output_dir}")
             else:
-                self.log("⚠ Output field not ready yet, will retry later")
+                self.log("[!] Output field not ready yet, will retry later")
             
             # Force sync settings to ensure they're properly loaded
             self.settings.sync()
@@ -5824,7 +9673,7 @@ class MainWindow(QMainWindow):
             multi_output_dir = self.settings.value("multi_output_directory", "downloads")
             if hasattr(self, 'multi_output'):
                 self.multi_output.setText(multi_output_dir)
-                self.log(f"📁 Multiple download output directory set to: '{multi_output_dir}'")
+                self.log(f"[F] Multiple download output directory set to: '{multi_output_dir}'")
             
             # Multiple download URLs will be loaded in retry_load_multi_urls() after UI is ready
             
@@ -5881,7 +9730,7 @@ class MainWindow(QMainWindow):
             profile_output_dir = self.settings.value("profile_output_directory", "downloads/profiles")
             if hasattr(self, 'profile_output'):
                 self.profile_output.setText(profile_output_dir)
-                self.log(f"📁 Profile download output directory set to: '{profile_output_dir}'")
+                self.log(f"[F] Profile download output directory set to: '{profile_output_dir}'")
             
             # Profile info and progress content - NOT persisted (starts fresh each session)
             if hasattr(self, 'profile_videos_text'):
@@ -5889,10 +9738,64 @@ class MainWindow(QMainWindow):
             if hasattr(self, 'profile_progress_text'):
                 self.profile_progress_text.clear()
             
-            self.log("✓ Settings loaded from previous session")
+            # === IMAGE DOWNLOAD TAB PERSISTENCE ===
+            # Image download URLs
+            image_urls = self.settings.value("image_urls", "")
+            if hasattr(self, 'image_url_list_widget') and image_urls:
+                self.image_url_list_widget.add_urls_from_text(image_urls)
+                self.update_image_url_status()
+            
+            # Image download output directory
+            image_output_dir = self.settings.value("image_output_directory", "downloads/images")
+            if hasattr(self, 'image_output'):
+                self.image_output.setText(image_output_dir)
+                self.log(f"[F] Image download output directory set to: '{image_output_dir}'")
+            
+            # Image download options
+            if hasattr(self, '_image_subfolder'):
+                self._image_subfolder = self.settings.value("image_subfolder", True, type=bool)
+            if hasattr(self, '_image_skip_duplicates'):
+                self._image_skip_duplicates = self.settings.value("image_skip_duplicates", True, type=bool)
+            if hasattr(self, '_image_highres'):
+                self._image_highres = self.settings.value("image_highres", True, type=bool)
+            if hasattr(self, '_image_min_size'):
+                self._image_min_size = self.settings.value("image_min_size", 0, type=int)
+            if hasattr(self, '_image_pinterest_max'):
+                self._image_pinterest_max = self.settings.value("image_pinterest_max", 50, type=int)
+            if hasattr(self, '_image_format'):
+                self._image_format = self.settings.value("image_format", "All formats")
+            if hasattr(self, '_image_concurrent'):
+                self._image_concurrent = self.settings.value("image_concurrent", 4, type=int)
+            
+            # Image progress content - NOT persisted (starts fresh each session)
+            if hasattr(self, 'image_progress_text'):
+                self.image_progress_text.clear()
+            
+            # === EDIT VIDEOS TAB PERSISTENCE ===
+            edit_input = self.settings.value("edit_input_path", "")
+            if hasattr(self, 'edit_input_folder') and edit_input:
+                self.edit_input_folder.setText(edit_input)
+                self.update_edit_video_count()
+            
+            edit_output = self.settings.value("edit_output_path", "downloads/edited")
+            if hasattr(self, 'edit_output_folder'):
+                self.edit_output_folder.setText(edit_output)
+            
+            # Load edit video settings
+            edit_settings_json = self.settings.value("edit_video_settings", "")
+            if edit_settings_json:
+                try:
+                    import json
+                    self._edit_settings = json.loads(edit_settings_json)
+                    # Update settings label
+                    self.update_edit_settings_label()
+                except:
+                    self._edit_settings = {}
+            
+            self.log("[OK] Settings loaded from previous session")
             
         except Exception as e:
-            self.log(f"⚠ Could not load some settings: {e}")
+            self.log(f"[!] Could not load some settings: {e}")
         finally:
             self._loading_settings = False  # Re-enable auto-save
     
@@ -5986,24 +9889,62 @@ class MainWindow(QMainWindow):
                     profile_current_dir = "downloads/profiles"
                 self.settings.setValue("profile_output_directory", profile_current_dir)
             
+            # === IMAGE DOWNLOAD TAB PERSISTENCE ===
+            # Image download URLs
+            if hasattr(self, 'image_url_list_widget'):
+                urls = self.image_url_list_widget.get_all_urls()
+                self.settings.setValue("image_urls", "\n".join(urls))
+            
+            # Image download output directory
+            if hasattr(self, 'image_output'):
+                image_current_dir = self.image_output.text().strip()
+                if not image_current_dir:
+                    image_current_dir = "downloads/images"
+                self.settings.setValue("image_output_directory", image_current_dir)
+            
+            # Image download options
+            if hasattr(self, '_image_subfolder'):
+                self.settings.setValue("image_subfolder", self._image_subfolder)
+            if hasattr(self, '_image_skip_duplicates'):
+                self.settings.setValue("image_skip_duplicates", self._image_skip_duplicates)
+            if hasattr(self, '_image_highres'):
+                self.settings.setValue("image_highres", self._image_highres)
+            if hasattr(self, '_image_min_size'):
+                self.settings.setValue("image_min_size", self._image_min_size)
+            if hasattr(self, '_image_pinterest_max'):
+                self.settings.setValue("image_pinterest_max", self._image_pinterest_max)
+            if hasattr(self, '_image_format'):
+                self.settings.setValue("image_format", self._image_format)
+            if hasattr(self, '_image_concurrent'):
+                self.settings.setValue("image_concurrent", self._image_concurrent)
+            
+            # === EDIT VIDEOS TAB PERSISTENCE ===
+            if hasattr(self, 'edit_input_folder'):
+                self.settings.setValue("edit_input_path", self.edit_input_folder.text())
+            if hasattr(self, 'edit_output_folder'):
+                self.settings.setValue("edit_output_path", self.edit_output_folder.text())
+            if hasattr(self, '_edit_settings'):
+                import json
+                self.settings.setValue("edit_video_settings", json.dumps(self._edit_settings))
+            
             # Sync settings to disk
             self.settings.sync()
             
             if not silent:
-                self.log("✓ Settings saved successfully")
+                self.log("[OK] Settings saved successfully")
             
         except Exception as e:
             if not silent:
-                self.log(f"⚠ Could not save some settings: {e}")
+                self.log(f"[!] Could not save some settings: {e}")
     
     def closeEvent(self, event):
         """Handle application close event to save settings"""
         try:
             # Force save all settings before closing
             self.save_settings()
-            self.log("🔒 Application closing - settings saved")
+            self.log("[?] Application closing - settings saved")
         except Exception as e:
-            self.log(f"⚠ Error saving settings on close: {e}")
+            self.log(f"[!] Error saving settings on close: {e}")
         event.accept()
     
     def reset_all_settings(self):
@@ -6059,7 +10000,7 @@ class MainWindow(QMainWindow):
             if hasattr(self, 'tab_widget'):
                 self.tab_widget.setCurrentIndex(0)
             
-            self.log("✓ All settings reset to defaults")
+            self.log("[OK] All settings reset to defaults")
 
     def on_tab_changed(self, index):
         """Handle tab change to save current state"""
@@ -6136,9 +10077,94 @@ def main():
         except:
             continue
     
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec())
+    # License check (optional - set SKIP_LICENSE=1 to bypass)
+    import os
+    skip_license = os.environ.get('SKIP_LICENSE', '0') == '1'
+    
+    if LICENSE_CLIENT_AVAILABLE and not skip_license:
+        license_client = get_license_client()
+        
+        # Create a helper class to handle cross-thread signals
+        from PyQt6.QtCore import QObject, pyqtSignal
+        
+        class LicenseSignalHandler(QObject):
+            license_disabled = pyqtSignal(str)
+            
+            def __init__(self):
+                super().__init__()
+                self.license_disabled.connect(self._show_disabled_dialog)
+            
+            def _show_disabled_dialog(self, message):
+                from PyQt6.QtWidgets import QMessageBox
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Icon.Critical)
+                msg.setWindowTitle("License Disabled")
+                msg.setText("Your license has been disabled by the administrator.")
+                msg.setInformativeText("Please contact support or purchase a new license.")
+                msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+                msg.setStyleSheet("""
+                    QMessageBox {
+                        background-color: #1a1a2e;
+                        color: #ffffff;
+                    }
+                    QMessageBox QLabel {
+                        color: #ffffff;
+                        font-size: 13px;
+                    }
+                    QMessageBox QPushButton {
+                        background-color: #e74c3c;
+                        color: white;
+                        border: none;
+                        padding: 8px 24px;
+                        border-radius: 6px;
+                        font-weight: bold;
+                        min-width: 80px;
+                    }
+                    QMessageBox QPushButton:hover {
+                        background-color: #c0392b;
+                    }
+                """)
+                msg.exec()
+                QApplication.quit()
+        
+        license_signal_handler = LicenseSignalHandler()
+        
+        # Set up real-time license revocation handler
+        def handle_license_disabled(message):
+            """Called INSTANTLY when license is disabled by admin"""
+            print(f"LICENSE DISABLED: {message}")
+            license_signal_handler.license_disabled.emit(message)
+        
+        license_client.on_license_disabled(handle_license_disabled)
+        
+        # Create main window first (will be shown in background)
+        window = MainWindow()
+        window.show()
+        QApplication.processEvents()
+        
+        # Check if already has valid cached license
+        if not license_client.is_valid():
+            # Try to validate with server
+            result = license_client.validate()
+            
+            if not result.get("valid"):
+                # Show activation dialog over the main window
+                dialog = LicenseActivationDialog(window, license_client)
+                if dialog.exec() != QDialog.DialogCode.Accepted or not dialog.activated:
+                    # User cancelled or activation failed
+                    sys.exit(0)
+        
+        # Update license display after successful validation
+        window.update_license_display()
+        
+        # Start background validation (real-time monitoring)
+        license_client.start_background_validation()
+        
+        sys.exit(app.exec())
+    else:
+        window = MainWindow()
+        window.show()
+        sys.exit(app.exec())
 
 
 if __name__ == "__main__":

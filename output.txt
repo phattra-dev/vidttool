@@ -1,0 +1,6 @@
+[UPDATE] Checking for updates from: https://raw.githubusercontent.com/phattra-dev/vidttool/main/version.json
+[UPDATE] Update check thread started
+[UPDATE] Response status: 200
+[UPDATE] Latest version: 1.1.7, Current: 1.1.6
+[UPDATE] Current tuple: (1, 1, 6), Latest tuple: (1, 1, 7)
+[UPDATE] New version available! Showing dialog...
