@@ -18,7 +18,7 @@ import logging
 # Configuration
 SUPABASE_URL = "https://gnmhaxqrtmzcitqwabeg.supabase.co"
 SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdubWhheHFydG16Y2l0cXdhYmVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgzMjcyNzgsImV4cCI6MjA4MzkwMzI3OH0.chs9SkmwdFBUmboEUAC57gY7gleDw8UURW9IdffzDtI"
-APP_VERSION = "1.1.8"
+APP_VERSION = "1.1.9"
 CACHE_DIR = Path.home() / ".tiktools"
 CACHE_FILE = CACHE_DIR / "license_cache.enc"
 
