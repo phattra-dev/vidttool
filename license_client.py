@@ -18,7 +18,7 @@ import logging
 # Configuration
 SUPABASE_URL = "https://gnmhaxqrtmzcitqwabeg.supabase.co"
 SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdubWhheHFydG16Y2l0cXdhYmVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgzMjcyNzgsImV4cCI6MjA4MzkwMzI3OH0.chs9SkmwdFBUmboEUAC57gY7gleDw8UURW9IdffzDtI"
-APP_VERSION = "1.1.9"
+APP_VERSION = "1.2.0"
 CACHE_DIR = Path.home() / ".tiktools"
 CACHE_FILE = CACHE_DIR / "license_cache.enc"
 
@@ -207,6 +207,49 @@ class RealtimeLicenseClient:
             return {"error": "connection_error"}
         except Exception as e:
             return {"error": str(e)}
+    
+    def _track_user(self, license_key: str = None):
+        """Track user in users table for admin dashboard visibility"""
+        try:
+            now = datetime.utcnow().isoformat()
+            app_id = self.machine_id
+            
+            # Check if user exists
+            result = self._api_request("GET", "users", filters={"app_id": app_id})
+            
+            if result.get("data"):
+                # Update existing user
+                user = result["data"][0]
+                # Don't update if user is banned, suspicious, or hacking
+                if user.get("status") in ["banned", "suspicious", "hacking"]:
+                    return  # Don't modify banned/flagged users
+                
+                updates = {
+                    "last_seen": now,
+                    "total_visits": (user.get("total_visits") or 0) + 1
+                }
+                if license_key:
+                    updates["license_key"] = license_key
+                    # Only set to active if not already in a special status
+                    if user.get("status") not in ["banned", "suspicious", "hacking"]:
+                        updates["status"] = "active"
+                
+                self._api_request("PATCH", "users", data=updates, filters={"app_id": app_id})
+            else:
+                # Create new user
+                user_data = {
+                    "app_id": app_id,
+                    "license_key": license_key,
+                    "status": "active" if license_key else "visitor",
+                    "first_seen": now,
+                    "last_seen": now,
+                    "total_visits": 1,
+                    "failed_attempts": 0
+                }
+                self._api_request("POST", "users", data=user_data)
+        except Exception as e:
+            logger.debug(f"User tracking failed: {e}")
+            pass  # Don't fail validation on tracking errors
 
     # ==================== REAL-TIME WEBSOCKET ====================
     
@@ -369,7 +412,7 @@ class RealtimeLicenseClient:
         except Exception as e:
             logger.debug(f"Message parse error: {e}")
     
-    def _handle_license_disabled(self):
+    def _handle_license_disabled(self, message: str = None):
         """Handle license being disabled/revoked"""
         with self._lock:
             # Prevent multiple triggers
@@ -385,12 +428,15 @@ class RealtimeLicenseClient:
             self._stop_polling.set()
             self._stop_realtime.set()
             
+            # Log the disable reason for debugging
+            logger.warning(f"License disabled: {message or 'No reason provided'}")
+            
             if self._on_status_change and old_status != LicenseStatus.DISABLED:
                 try: self._on_status_change(old_status, LicenseStatus.DISABLED)
                 except: pass
             
             if self._on_license_disabled:
-                try: self._on_license_disabled("License has been disabled by administrator")
+                try: self._on_license_disabled(message or "License has been disabled by administrator")
                 except: pass
 
     # ==================== FALLBACK POLLING ====================
@@ -413,13 +459,30 @@ class RealtimeLicenseClient:
         """Polling loop for license status"""
         while not self._stop_polling.wait(timeout=interval):
             if self.license_key:
+                logger.debug(f"Polling check - License: {self.license_key[:8]}... Status: {self.license_status}")
                 self._check_license_status()
     
     def _check_license_status(self):
-        """Quick check of license status"""
+        """Quick check of license status and ban status"""
         if not self.license_key: return
         
         logger.debug(f"Polling license status...")
+        
+        # Check if user is banned - check both machine_id and machine_hash
+        ban_check = self._api_request("GET", "users", filters={"app_id": self.machine_id})
+        if not ban_check.get("data"):
+            # Also check by machine_hash (for old records)
+            ban_check = self._api_request("GET", "users", filters={"app_id": self.machine_hash})
+        
+        if ban_check.get("data"):
+            user_data = ban_check["data"][0]
+            if user_data.get("status") == "banned":
+                ban_reason = user_data.get("ban_reason", "Your device has been banned by administrator")
+                logger.warning(f"USER BANNED: {ban_reason}")
+                self._handle_license_disabled(f"Device Banned: {ban_reason}")
+                return
+        
+        # Check license status
         result = self._api_request("GET", "licenses", filters={"key": self.license_key})
         if result.get("error"): 
             logger.debug(f"Poll error: {result.get('error')}")
@@ -428,7 +491,7 @@ class RealtimeLicenseClient:
         data = result.get("data", [])
         if not data:
             logger.warning("LICENSE NOT FOUND - DISABLED!")
-            self._handle_license_disabled()
+            self._handle_license_disabled("License has been deleted")
             return
         
         record = data[0]
@@ -437,14 +500,14 @@ class RealtimeLicenseClient:
         
         if not is_active:
             logger.warning("LICENSE DISABLED BY ADMIN!")
-            self._handle_license_disabled()
+            self._handle_license_disabled("License has been disabled by administrator")
             return
         
         # Check if machine still bound
         bound = record.get("bound_machines") or []
         if self.machine_hash not in bound:
             logger.warning("MACHINE REMOVED FROM LICENSE!")
-            self._handle_license_disabled()
+            self._handle_license_disabled("Device has been removed from license")
     
     # ==================== MAIN VALIDATION ====================
     
@@ -460,6 +523,18 @@ class RealtimeLicenseClient:
             key = (license_key or self.license_key or "").strip().upper()
             if not key:
                 return {"valid": False, "status": LicenseStatus.INVALID, "error": "No license key"}
+            
+            # Check if this device is banned (check both machine_id and machine_hash)
+            ban_check = self._api_request("GET", "users", filters={"app_id": self.machine_id})
+            if not ban_check.get("data"):
+                # Also check by machine_hash (for old records)
+                ban_check = self._api_request("GET", "users", filters={"app_id": self.machine_hash})
+            if ban_check.get("data"):
+                user_data = ban_check["data"][0]
+                if user_data.get("status") == "banned":
+                    ban_reason = user_data.get("ban_reason", "Your device has been banned by administrator")
+                    self._clear_cache()
+                    return {"valid": False, "status": LicenseStatus.DISABLED, "error": f"Device Banned: {ban_reason}"}
             
             # Online validation
             result = self._api_request("GET", "licenses", filters={"key": key})
@@ -504,8 +579,12 @@ class RealtimeLicenseClient:
                 self._api_request("PATCH", "licenses", data={"bound_machines": bound}, filters={"key": key})
                 self._api_request("POST", "activations", data={
                     "license_key": key, "machine_hash": self.machine_hash,
+                    "app_id": self.machine_id,
                     "activated_at": datetime.utcnow().isoformat(), "app_version": APP_VERSION
                 })
+            
+            # Track user in users table
+            self._track_user(key)
             
             # Update last seen
             self._api_request("PATCH", "licenses", data={

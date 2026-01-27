@@ -3684,8 +3684,8 @@ class VideoDownloader:
                     print("Facebook helper failed, trying yt-dlp...")
             
             opts = {
-                'quiet': False,  # Enable some output for debugging
-                'no_warnings': False,
+                'quiet': True if platform == 'TikTok' else False,  # Quiet for TikTok to suppress errors
+                'no_warnings': True if platform == 'TikTok' else False,
                 'extract_flat': True,  # Only get URLs, don't download
                 'ignoreerrors': True,  # Continue on errors
                 'no_color': True,  # Disable ANSI colors
@@ -3803,7 +3803,8 @@ class VideoDownloader:
                 
                 print(f"Successfully extracted {len(videos)} videos")
                 
-                return {
+                # Add TikTok-specific warning if videos were found
+                result = {
                     'success': True,
                     'videos': videos,
                     'profile_name': info.get('uploader', info.get('title', info.get('channel', 'Unknown'))),
@@ -3811,6 +3812,21 @@ class VideoDownloader:
                     'platform': platform,
                     'raw_total': info.get('playlist_count', len(videos))  # Sometimes yt-dlp knows the real total
                 }
+                
+                # Add TikTok-specific guidance
+                if platform == 'TikTok' and videos:
+                    result['tiktok_warning'] = {
+                        'message': 'TikTok profile extraction successful, but individual video downloads may fail due to TikTok blocking.',
+                        'alternatives': [
+                            'Individual video downloads currently blocked by TikTok (affects all tools)',
+                            'Your tool already implements methods from popular sites',
+                            'Try downloading with cookies (export from browser)',
+                            'Use VPN to change location',
+                            'Wait for yt-dlp update (usually 1-3 days)'
+                        ]
+                    }
+                
+                return result
                 
         except Exception as e:
             error_msg = str(e)
@@ -4207,6 +4223,49 @@ class VideoDownloader:
             downloaded_file = None
             
             try:
+                # For TikTok, try the seamless integration first to avoid error messages
+                platform = self.detect_platform(url)
+                if 'TikTok' in platform:
+                    if callback:
+                        callback("[*] Processing TikTok with seamless integration...")
+                    
+                    # Use the seamless TikTok downloader directly
+                    try:
+                        from tiktok_seamless_integration import integrate_tiktok_download
+                        
+                        # Generate output filename
+                        import re
+                        video_id = re.search(r'/video/(\d+)', url)
+                        if video_id:
+                            output_filename = f"tiktok_{video_id.group(1)}.mp4"
+                        else:
+                            import time
+                            output_filename = f"tiktok_{int(time.time())}.mp4"
+                        
+                        output_path = self.output_dir / output_filename
+                        
+                        # Try seamless download directly
+                        success = integrate_tiktok_download(url, str(output_path), callback)
+                        
+                        if success and output_path.exists():
+                            downloaded_file = output_path
+                            if callback:
+                                callback(f"[OK] TikTok video downloaded successfully!")
+                            return {'success': True, 'file_path': downloaded_file}
+                        else:
+                            # Seamless integration failed, provide clean message
+                            if callback:
+                                callback("[!] TikTok temporarily unavailable - try again later")
+                                callback("[!] YouTube and other platforms work perfectly")
+                            return {'success': False, 'error': 'TikTok temporarily blocked'}
+                    
+                    except ImportError:
+                        # Fallback if seamless integration not available
+                        if callback:
+                            callback("[!] TikTok integration not available")
+                        pass
+                
+                # For non-TikTok or if seamless failed, use standard approach
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     # Extract info to get the final filename
                     info = ydl.extract_info(url, download=False)
@@ -4234,30 +4293,193 @@ class VideoDownloader:
                 if callback:
                     callback("[!] Format selection failed, trying simpler format...")
                 
-                # Create simpler options
-                simple_opts = opts.copy()
-                
-                # For Facebook, try hd/sd format IDs first, then fall back to best
+                # TikTok-specific seamless integration without failure messages
                 platform = self.detect_platform(url)
-                if 'Facebook' in platform:
-                    simple_opts['format'] = 'hd/sd/best'
-                else:
-                    simple_opts['format'] = 'best'  # Just get the best available format
+                if 'TikTok' in platform:
+                    if callback:
+                        callback("[*] Processing TikTok video with seamless integration...")
+                    
+                    # Use the new seamless TikTok downloader
+                    try:
+                        from tiktok_seamless_integration import integrate_tiktok_download
+                        
+                        # Generate output filename
+                        import re
+                        video_id = re.search(r'/video/(\d+)', url)
+                        if video_id:
+                            output_filename = f"tiktok_{video_id.group(1)}.mp4"
+                        else:
+                            import time
+                            output_filename = f"tiktok_{int(time.time())}.mp4"
+                        
+                        output_path = self.output_dir / output_filename
+                        
+                        # Try seamless download
+                        success = integrate_tiktok_download(url, str(output_path), callback)
+                        
+                        if success and output_path.exists():
+                            downloaded_file = output_path
+                            if callback:
+                                callback(f"[OK] TikTok video downloaded successfully!")
+                        else:
+                            # Only show minimal feedback if all methods fail
+                            if callback:
+                                callback("[!] TikTok temporarily unavailable - try again later")
+                                callback("[!] YouTube and other platforms work perfectly")
+                            
+                            # Skip verbose failure messages - keep it clean
+                            pass
+                    
+                    except ImportError:
+                        # Advanced downloader not available, fall back to original method
+                        if callback:
+                            callback("[!] Advanced TikTok downloader not available, using basic methods...")
+                        
+                        # Original 3-method fallback system (keeping as backup)
+                        # Method 1: Try standard extraction with simple format
+                        try:
+                            if callback:
+                                callback("[1/3] Trying standard extraction...")
+                            simple_opts = opts.copy()
+                            simple_opts['format'] = 'best'
+                            
+                            with yt_dlp.YoutubeDL(simple_opts) as ydl:
+                                info = ydl.extract_info(url, download=False)
+                                expected_filename = ydl.prepare_filename(info)
+                                ydl.download([url])
+                                
+                                # Find the downloaded file
+                                base_path = Path(expected_filename).with_suffix('')
+                                possible_extensions = ['.mp4', '.webm', '.mkv', '.avi', '.mov']
+                                
+                                for ext in possible_extensions:
+                                    potential_file = base_path.with_suffix(ext)
+                                    if potential_file.exists():
+                                        downloaded_file = potential_file
+                                        break
+                                
+                                if downloaded_file:
+                                    if callback:
+                                        callback("[OK] Standard extraction successful")
+                                    # Success - continue with normal flow
+                                else:
+                                    raise Exception("File not found after download")
+                                    
+                        except Exception as e1:
+                            if callback:
+                                callback(f"[!] Standard method failed: {str(e1)[:100]}...")
+                            
+                            # Method 2: Try with cookies if available
+                            cookies_file = Path("cookies/tiktok_cookies.txt")
+                            if cookies_file.exists() and cookies_file.stat().st_size > 500:
+                                try:
+                                    if callback:
+                                        callback("[2/3] Trying with cookies...")
+                                    
+                                    cookie_opts = opts.copy()
+                                    cookie_opts['format'] = 'best'
+                                    cookie_opts['cookiefile'] = str(cookies_file)
+                                    
+                                    with yt_dlp.YoutubeDL(cookie_opts) as ydl:
+                                        info = ydl.extract_info(url, download=False)
+                                        expected_filename = ydl.prepare_filename(info)
+                                        ydl.download([url])
+                                        
+                                        # Find the downloaded file
+                                        base_path = Path(expected_filename).with_suffix('')
+                                        possible_extensions = ['.mp4', '.webm', '.mkv', '.avi', '.mov']
+                                        
+                                        for ext in possible_extensions:
+                                            potential_file = base_path.with_suffix(ext)
+                                            if potential_file.exists():
+                                                downloaded_file = potential_file
+                                                break
+                                        
+                                        if downloaded_file:
+                                            if callback:
+                                                callback("[OK] Cookie extraction successful")
+                                            # Success - continue with normal flow
+                                        else:
+                                            raise Exception("File not found after download")
+                                            
+                                except Exception as e2:
+                                    if callback:
+                                        callback(f"[!] Cookie method failed: {str(e2)[:100]}...")
+                            
+                            # Method 3: Try with mobile user agent
+                            if not downloaded_file:
+                                try:
+                                    if callback:
+                                        callback("[3/3] Trying with mobile user agent...")
+                                    
+                                    mobile_opts = opts.copy()
+                                    mobile_opts['format'] = 'best'
+                                    mobile_opts['http_headers'] = {
+                                        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
+                                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                                        'Accept-Language': 'en-US,en;q=0.9',
+                                    }
+                                    
+                                    with yt_dlp.YoutubeDL(mobile_opts) as ydl:
+                                        info = ydl.extract_info(url, download=False)
+                                        expected_filename = ydl.prepare_filename(info)
+                                        ydl.download([url])
+                                        
+                                        # Find the downloaded file
+                                        base_path = Path(expected_filename).with_suffix('')
+                                        possible_extensions = ['.mp4', '.webm', '.mkv', '.avi', '.mov']
+                                        
+                                        for ext in possible_extensions:
+                                            potential_file = base_path.with_suffix(ext)
+                                            if potential_file.exists():
+                                                downloaded_file = potential_file
+                                                break
+                                        
+                                        if downloaded_file:
+                                            if callback:
+                                                callback("[OK] Mobile user agent successful")
+                                            # Success - continue with normal flow
+                                        else:
+                                            raise Exception("File not found after download")
+                                            
+                                except Exception as e3:
+                                    if callback:
+                                        callback(f"[!] Mobile method failed: {str(e3)[:100]}...")
+                            
+                            # All TikTok methods failed - minimal feedback
+                            if not downloaded_file:
+                                if callback:
+                                    callback("[!] TikTok temporarily unavailable - try again later")
+                                    callback("[!] YouTube and other platforms work perfectly")
+                                
+                                # Re-raise with minimal context
+                                raise Exception(f"TikTok extraction failed - temporary issue. Original error: {str(format_error)}")
                 
-                with yt_dlp.YoutubeDL(simple_opts) as ydl:
-                    info = ydl.extract_info(url, download=False)
-                    expected_filename = ydl.prepare_filename(info)
-                    ydl.download([url])
+                # For non-TikTok platforms, use the original simple format fallback
+                if not downloaded_file and 'TikTok' not in platform:
+                    # Create simpler options
+                    simple_opts = opts.copy()
                     
-                    # Find the downloaded file
-                    base_path = Path(expected_filename).with_suffix('')
-                    possible_extensions = ['.mp4', '.webm', '.mkv', '.avi', '.mov']
+                    # For Facebook, try hd/sd format IDs first, then fall back to best
+                    if 'Facebook' in platform:
+                        simple_opts['format'] = 'hd/sd/best'
+                    else:
+                        simple_opts['format'] = 'best'  # Just get the best available format
                     
-                    for ext in possible_extensions:
-                        potential_file = base_path.with_suffix(ext)
-                        if potential_file.exists():
-                            downloaded_file = potential_file
-                            break
+                    with yt_dlp.YoutubeDL(simple_opts) as ydl:
+                        info = ydl.extract_info(url, download=False)
+                        expected_filename = ydl.prepare_filename(info)
+                        ydl.download([url])
+                        
+                        # Find the downloaded file
+                        base_path = Path(expected_filename).with_suffix('')
+                        possible_extensions = ['.mp4', '.webm', '.mkv', '.avi', '.mov']
+                        
+                        for ext in possible_extensions:
+                            potential_file = base_path.with_suffix(ext)
+                            if potential_file.exists():
+                                downloaded_file = potential_file
+                                break
                     
                     if not downloaded_file and Path(expected_filename).exists():
                         downloaded_file = Path(expected_filename)
@@ -4424,7 +4646,7 @@ class Worker(QThread):
 
 
 class MainWindow(QMainWindow):
-    VERSION = "1.1.9"
+    VERSION = "1.2.0"
     APP_ID = None  # Unique installation ID
     
     def __init__(self):
@@ -10098,9 +10320,19 @@ def main():
                 from PyQt6.QtWidgets import QMessageBox
                 msg = QMessageBox()
                 msg.setIcon(QMessageBox.Icon.Critical)
-                msg.setWindowTitle("License Disabled")
-                msg.setText("Your license has been disabled by the administrator.")
-                msg.setInformativeText("Please contact support or purchase a new license.")
+                
+                # Check if it's a ban message - improved detection
+                if ("device banned" in message.lower() or 
+                    "banned:" in message.lower() or 
+                    "has been banned" in message.lower()):
+                    msg.setWindowTitle("Device Banned")
+                    msg.setText("Your device has been banned!")
+                    msg.setInformativeText(message)
+                else:
+                    msg.setWindowTitle("License Disabled")
+                    msg.setText("Your license has been disabled by the administrator.")
+                    msg.setInformativeText(message if message else "Please contact support or purchase a new license.")
+                
                 msg.setStandardButtons(QMessageBox.StandardButton.Ok)
                 msg.setStyleSheet("""
                     QMessageBox {
