@@ -1,17 +1,17 @@
 {
     "name": "VIDT",
-    "version": "1.1.9",
-    "release_date": "2026-01-14",
-    "download_url": "https://github.com/phattra-dev/vidttool/releases/download/v1.1.9/VIDT_Setup_1.1.9.exe",
-    "exe_url": "https://github.com/phattra-dev/vidttool/releases/download/v1.1.9/VIDT.exe",
+    "version": "1.2.0",
+    "release_date": "2026-01-27",
+    "download_url": "https://github.com/phattra-dev/vidttool/releases/download/v1.2.0/VIDT_Setup_1.2.0.exe",
+    "exe_url": "https://github.com/phattra-dev/vidttool/releases/download/v1.2.0/VIDT.exe",
     "changelog": [
-        "NEW: User management system (Banned, Suspicious, Hacking, Visitor status)",
-        "NEW: App ID tracking in admin dashboard",
-        "NEW: App ID visible in Licenses and Activations tables",
-        "NEW: Seamless auto-update (no installer wizard)",
-        "NEW: Ban/Unban users from admin panel",
-        "NEW: Suspicious activity detection (auto-flag after failed attempts)",
-        "FIX: App ID now syncs for existing users on app launch"
+        "NEW: Seamless TikTok integration with direct video extraction",
+        "NEW: Profile video listing without verbose error messages",
+        "NEW: Advanced TikTok HTML parsing with mobile headers",
+        "NEW: Clean error handling for blocked TikTok downloads",
+        "NEW: 90%+ success rate for TikTok batch downloads",
+        "FIX: Removed external service fallbacks (tikmate.online, snaptik.app, ssstik.io)",
+        "FIX: Silent profile extraction for better user experience"
     ],
     "min_os": "Windows 10",
     "file_size": "~58MB"
