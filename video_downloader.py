@@ -67,6 +67,91 @@ class VideoDownloader:
             'no_warnings': True,
         }
         
+        # TikTok-specific handling with fallback methods
+        if 'tiktok.com' in url.lower():
+            print(f"[*] TikTok detected - trying multiple methods...")
+            
+            # Method 1: Try standard extraction
+            try:
+                print(f"[1/3] Trying standard extraction...")
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                    if info:
+                        print(f"[OK] Standard extraction successful")
+                        return {
+                            'title': info.get('title', 'Unknown'),
+                            'uploader': info.get('uploader', 'Unknown'),
+                            'duration': info.get('duration', 0),
+                            'view_count': info.get('view_count', 0),
+                            'upload_date': info.get('upload_date', 'Unknown'),
+                            'formats': len(info.get('formats', [])),
+                            'platform': self.detect_platform(url)
+                        }
+            except Exception as e:
+                print(f"[!] Standard method failed: {str(e)[:100]}...")
+            
+            # Method 2: Try with cookies if available
+            cookies_file = Path("cookies/tiktok_cookies.txt")
+            if cookies_file.exists() and cookies_file.stat().st_size > 500:  # Check if cookies file has content
+                try:
+                    print(f"[2/3] Trying with cookies...")
+                    ydl_opts_cookies = ydl_opts.copy()
+                    ydl_opts_cookies['cookiefile'] = str(cookies_file)
+                    
+                    with yt_dlp.YoutubeDL(ydl_opts_cookies) as ydl:
+                        info = ydl.extract_info(url, download=False)
+                        if info:
+                            print(f"[OK] Cookie extraction successful")
+                            return {
+                                'title': info.get('title', 'Unknown'),
+                                'uploader': info.get('uploader', 'Unknown'),
+                                'duration': info.get('duration', 0),
+                                'view_count': info.get('view_count', 0),
+                                'upload_date': info.get('upload_date', 'Unknown'),
+                                'formats': len(info.get('formats', [])),
+                                'platform': self.detect_platform(url)
+                            }
+                except Exception as e:
+                    print(f"[!] Cookie method failed: {str(e)[:100]}...")
+            
+            # Method 3: Try with alternative user agent
+            try:
+                print(f"[3/3] Trying with mobile user agent...")
+                ydl_opts_alt = ydl_opts.copy()
+                ydl_opts_alt['http_headers'] = {
+                    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                }
+                
+                with yt_dlp.YoutubeDL(ydl_opts_alt) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                    if info:
+                        print(f"[OK] Alternative user agent successful")
+                        return {
+                            'title': info.get('title', 'Unknown'),
+                            'uploader': info.get('uploader', 'Unknown'),
+                            'duration': info.get('duration', 0),
+                            'view_count': info.get('view_count', 0),
+                            'upload_date': info.get('upload_date', 'Unknown'),
+                            'formats': len(info.get('formats', [])),
+                            'platform': self.detect_platform(url)
+                        }
+            except Exception as e:
+                print(f"[!] Alternative method failed: {str(e)[:100]}...")
+            
+            # All TikTok methods failed
+            print(f"[X] All TikTok extraction methods failed")
+            print(f"[?] TikTok Workarounds:")
+            print(f"    1. Use browser extension: TikTok Video Downloader")
+            print(f"    2. Try online service: ssstik.io or snaptik.app")
+            print(f"    3. Use VPN to change location")
+            print(f"    4. Export cookies from browser (see cookies/tiktok_cookies.txt)")
+            print(f"    5. Wait for yt-dlp update (usually fixed within days)")
+            
+            return None
+        
+        # Standard extraction for non-TikTok URLs
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)

@@ -3,7 +3,7 @@
 ; Run with Inno Setup Compiler to create installer
 
 #define MyAppName "VIDT"
-#define MyAppVersion "1.1.9"
+#define MyAppVersion "1.2.0"
 #define MyAppPublisher "VIDT"
 #define MyAppURL "https://github.com/phattra-dev/vidttool"
 #define MyAppExeName "VIDT.exe"

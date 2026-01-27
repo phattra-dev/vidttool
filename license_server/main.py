@@ -58,13 +58,16 @@ def log_activity(action: str, details: dict, ip: str = None):
     """Log activity for audit trail"""
     try:
         db = get_supabase()
-        db.table("activity_logs").insert({
+        log_entry = {
             "id": str(uuid.uuid4()),
             "action": action,
-            "details": details,
+            "license_key": details.get("license"),
+            "app_id": details.get("app_id"),
             "ip": ip,
+            "details": json.dumps(details) if details else None,
             "timestamp": datetime.utcnow().isoformat()
-        }).execute()
+        }
+        db.table("activity_logs").insert(log_entry).execute()
     except:
         pass  # Don't fail on logging errors
 
@@ -84,31 +87,42 @@ async def validate_license(request: Request):
         license_key = data.get("license_key", "").strip().upper()
         machine_id = data.get("machine_id", "")
         app_version = data.get("app_version", "")
+        app_id = data.get("app_id", machine_id)  # Use app_id if provided, fallback to machine_id
         
         if not license_key or not machine_id:
             return JSONResponse({"valid": False, "error": "Missing required fields"})
         
         db = get_supabase()
+        client_ip = request.client.host
+        
+        # Check if user is banned
+        user_result = db.table("users").select("*").eq("app_id", app_id).execute()
+        if user_result.data and user_result.data[0].get("status") == "banned":
+            return JSONResponse({"valid": False, "error": "This device has been banned"})
         
         # Find license
         result = db.table("licenses").select("*").eq("key", license_key).execute()
         
         if not result.data:
-            log_activity("validate_failed", {"license": license_key, "reason": "not_found"}, request.client.host)
+            # Track failed attempt
+            track_user(db, app_id, None, client_ip, app_version, failed=True)
+            log_activity("validate_failed", {"license": license_key, "reason": "not_found", "app_id": app_id}, client_ip)
             return JSONResponse({"valid": False, "error": "Invalid license key"})
         
         license_data = result.data[0]
         
         # Check if license is active
         if not license_data.get("active", False):
-            log_activity("validate_failed", {"license": license_key, "reason": "disabled"}, request.client.host)
+            track_user(db, app_id, license_key, client_ip, app_version, failed=True)
+            log_activity("validate_failed", {"license": license_key, "reason": "disabled", "app_id": app_id}, client_ip)
             return JSONResponse({"valid": False, "error": "License has been disabled"})
         
         # Check expiration
         if license_data.get("expires_at"):
             expires = datetime.fromisoformat(license_data["expires_at"].replace("Z", ""))
             if datetime.utcnow() > expires:
-                log_activity("validate_failed", {"license": license_key, "reason": "expired"}, request.client.host)
+                track_user(db, app_id, license_key, client_ip, app_version, failed=True)
+                log_activity("validate_failed", {"license": license_key, "reason": "expired", "app_id": app_id}, client_ip)
                 return JSONResponse({"valid": False, "error": "License has expired"})
         
         # Check machine binding
@@ -116,33 +130,42 @@ async def validate_license(request: Request):
         bound_machines = license_data.get("bound_machines", []) or []
         max_machines = license_data.get("max_machines", 1)
         
-        if machine_hash not in bound_machines:
+        is_new_activation = machine_hash not in bound_machines
+        
+        if is_new_activation:
             if len(bound_machines) >= max_machines:
-                log_activity("validate_failed", {"license": license_key, "reason": "max_machines"}, request.client.host)
+                track_user(db, app_id, license_key, client_ip, app_version, failed=True)
+                log_activity("validate_failed", {"license": license_key, "reason": "max_machines", "app_id": app_id}, client_ip)
                 return JSONResponse({"valid": False, "error": f"Maximum {max_machines} device(s) allowed"})
             
             # Bind new machine
             bound_machines.append(machine_hash)
             db.table("licenses").update({"bound_machines": bound_machines}).eq("key", license_key).execute()
             
-            # Log activation
+            # Log activation with app_id
             db.table("activations").insert({
                 "id": str(uuid.uuid4()),
                 "license_key": license_key,
                 "machine_hash": machine_hash,
+                "app_id": app_id,
                 "activated_at": datetime.utcnow().isoformat(),
-                "ip": request.client.host,
+                "ip": client_ip,
                 "app_version": app_version
             }).execute()
+            
+            log_activity("activate", {"license": license_key, "app_id": app_id}, client_ip)
         
-        # Update last seen
+        # Track user (successful validation)
+        track_user(db, app_id, license_key, client_ip, app_version, failed=False)
+        
+        # Update last seen on license
         db.table("licenses").update({
             "last_seen": datetime.utcnow().isoformat(),
-            "last_ip": request.client.host,
+            "last_ip": client_ip,
             "last_version": app_version
         }).eq("key", license_key).execute()
         
-        log_activity("validate_success", {"license": license_key}, request.client.host)
+        log_activity("validate", {"license": license_key, "app_id": app_id}, client_ip)
         
         return JSONResponse({
             "valid": True,
@@ -154,6 +177,57 @@ async def validate_license(request: Request):
         
     except Exception as e:
         return JSONResponse({"valid": False, "error": str(e)})
+
+
+def track_user(db, app_id: str, license_key: str, ip: str, app_version: str, failed: bool = False):
+    """Track user in users table"""
+    try:
+        now = datetime.utcnow().isoformat()
+        
+        # Check if user exists
+        result = db.table("users").select("*").eq("app_id", app_id).execute()
+        
+        if result.data:
+            # Update existing user
+            user = result.data[0]
+            updates = {
+                "last_seen": now,
+                "last_ip": ip,
+                "total_visits": (user.get("total_visits") or 0) + 1
+            }
+            
+            if license_key:
+                updates["license_key"] = license_key
+                if not failed:
+                    updates["status"] = "active"
+            
+            if failed:
+                failed_attempts = (user.get("failed_attempts") or 0) + 1
+                updates["failed_attempts"] = failed_attempts
+                
+                # Auto-flag suspicious activity
+                if failed_attempts >= 3 and user.get("status") not in ["banned", "hacking"]:
+                    updates["status"] = "suspicious"
+                if failed_attempts >= 10 and user.get("status") != "banned":
+                    updates["status"] = "hacking"
+            
+            db.table("users").update(updates).eq("app_id", app_id).execute()
+        else:
+            # Create new user
+            user_data = {
+                "app_id": app_id,
+                "license_key": license_key,
+                "status": "active" if (license_key and not failed) else "visitor",
+                "first_seen": now,
+                "last_seen": now,
+                "last_ip": ip,
+                "total_visits": 1,
+                "failed_attempts": 1 if failed else 0
+            }
+            db.table("users").insert(user_data).execute()
+    except Exception as e:
+        print(f"Error tracking user: {e}")
+        pass  # Don't fail validation on tracking errors
 
 @app.post("/api/deactivate")
 async def deactivate_machine(request: Request):
