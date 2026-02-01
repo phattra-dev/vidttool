@@ -1,17 +1,16 @@
 {
     "name": "VIDT",
-    "version": "1.2.0",
-    "release_date": "2026-01-27",
-    "download_url": "https://github.com/phattra-dev/vidttool/releases/download/v1.2.0/VIDT_Setup_1.2.0.exe",
-    "exe_url": "https://github.com/phattra-dev/vidttool/releases/download/v1.2.0/VIDT.exe",
+    "version": "1.2.1",
+    "release_date": "2026-02-01",
+    "download_url": "https://github.com/phattra-dev/vidttool/releases/download/v1.2.1/VIDT_Setup_1.2.1.exe",
+    "exe_url": "https://github.com/phattra-dev/vidttool/releases/download/v1.2.1/VIDT.exe",
     "changelog": [
-        "NEW: Seamless TikTok integration with direct video extraction",
-        "NEW: Profile video listing without verbose error messages",
-        "NEW: Advanced TikTok HTML parsing with mobile headers",
-        "NEW: Clean error handling for blocked TikTok downloads",
-        "NEW: 90%+ success rate for TikTok batch downloads",
-        "FIX: Removed external service fallbacks (tikmate.online, snaptik.app, ssstik.io)",
-        "FIX: Silent profile extraction for better user experience"
+        "FIX: TikTok caption-based filenames now working properly",
+        "FIX: Resolved 'VideoDownloader' object has no attribute '_clean_tiktok_caption_for_filename' error",
+        "FIX: Added missing 're' import for TikTok caption processing",
+        "IMPROVE: TikTok filenames now use spaces instead of underscores",
+        "IMPROVE: Hashtags (#fyp, #viral) are preserved in TikTok filenames",
+        "IMPROVE: Better caption cleaning removes mentions and URLs while keeping hashtags"
     ],
     "min_os": "Windows 10",
     "file_size": "~58MB"

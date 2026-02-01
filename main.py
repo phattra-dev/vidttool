@@ -1370,278 +1370,588 @@ class ProfileDownloadDialog(QDialog):
         self.setup_dialog()
     
     def setup_dialog(self):
-        self.setWindowTitle("Profile Video Download")
-        self.setFixedSize(600, 500)
-        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.WindowCloseButtonHint)
+        self.setWindowTitle("Profile Download Settings")
+        self.setFixedSize(1000, 650)  # Increased size for better visibility
         
-        # Apply dark theme styling
+        # Apply comprehensive styling for better visibility
         self.setStyleSheet("""
             QDialog {
-                background: #161b22;
-                color: #f0f6fc;
-                border: 2px solid #30363d;
-                border-radius: 12px;
+                background-color: #2b2b2b;
+                color: #ffffff;
+            }
+            QTabWidget {
+                background-color: #2b2b2b;
+                border: none;
+            }
+            QTabWidget::pane {
+                border: 1px solid #555555;
+                background-color: #2b2b2b;
+            }
+            QTabWidget::tab-bar {
+                alignment: center;
+            }
+            QTabBar::tab {
+                background-color: #404040;
+                color: #ffffff;
+                padding: 8px 16px;
+                margin-right: 2px;
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
+            }
+            QTabBar::tab:selected {
+                background-color: #0078d4;
+                color: #ffffff;
+            }
+            QTabBar::tab:hover {
+                background-color: #505050;
+            }
+            QGroupBox {
+                font-weight: bold;
+                font-size: 12px;
+                color: #ffffff;
+                border: 2px solid #555555;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 10px;
+                background-color: #353535;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 8px 0 8px;
+                color: #ffffff;
+                background-color: #353535;
             }
             QLabel {
-                color: #f0f6fc;
-                font-size: 12px;
-                border: none;
+                color: #ffffff;
+                font-size: 11px;
+                font-weight: normal;
+                padding: 2px;
                 background: transparent;
             }
-        """)
-        
-        layout = QVBoxLayout(self)
-        layout.setSpacing(15)
-        layout.setContentsMargins(25, 25, 25, 25)
-        
-        # Header with profile info
-        header_layout = QHBoxLayout()
-        
-        profile_icon = QLabel("[P]")
-        profile_icon.setStyleSheet("font-size: 24px; border: none; background: transparent;")
-        
-        profile_info_layout = QVBoxLayout()
-        profile_info_layout.setSpacing(4)
-        
-        profile_name = QLabel(f"Profile: {self.profile_info.get('profile_name', 'Unknown')}")
-        profile_name.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        profile_name.setStyleSheet("color: #58a6ff; font-size: 13px; font-weight: bold;")
-        
-        video_count = QLabel(f"Found {self.profile_info.get('total_found', 0)} videos on {self.profile_info.get('platform', 'Unknown')}")
-        video_count.setStyleSheet("color: #7d8590; font-size: 11px;")
-        
-        profile_info_layout.addWidget(profile_name)
-        profile_info_layout.addWidget(video_count)
-        
-        header_layout.addWidget(profile_icon)
-        header_layout.addLayout(profile_info_layout)
-        header_layout.addStretch()
-        
-        layout.addLayout(header_layout)
-        
-        # Download options
-        options_frame = QFrame()
-        options_frame.setStyleSheet("""
-            QFrame {
-                background: rgba(33, 38, 45, 0.6);
-                border: 1px solid #30363d;
-                border-radius: 8px;
-                padding: 15px;
-            }
-        """)
-        
-        options_layout = QVBoxLayout(options_frame)
-        options_layout.setSpacing(10)
-        
-        # Max videos setting
-        max_videos_layout = QHBoxLayout()
-        max_videos_label = QLabel("Maximum videos to download:")
-        max_videos_label.setStyleSheet("color: #f0f6fc; font-size: 11px; font-weight: bold;")
-        
-        self.max_videos_spin = QComboBox()
-        
-        # Adjust options based on how many videos were found
-        total_found = self.profile_info.get('total_found', 0)
-        raw_total = self.profile_info.get('raw_total', total_found)
-        
-        options = ["10", "25", "50", "100", "200"]
-        
-        # Add the exact number found if it's not in our standard options
-        if total_found > 0 and str(total_found) not in options:
-            options.append(str(total_found))
-        
-        # Add "All available" option
-        if total_found > 0:
-            options.append(f"All available ({total_found})")
-        else:
-            options.append("All available")
-        
-        self.max_videos_spin.addItems(options)
-        
-        # Set default selection based on videos found
-        if total_found <= 25:
-            self.max_videos_spin.setCurrentText(f"All available ({total_found})" if total_found > 0 else "All available")
-        elif total_found <= 50:
-            self.max_videos_spin.setCurrentText("50")
-        else:
-            self.max_videos_spin.setCurrentText("100")
-        
-        self.max_videos_spin.setStyleSheet("""
-            QComboBox {
-                background: #21262d;
-                color: #f0f6fc;
-                border: 1px solid #30363d;
-                border-radius: 6px;
+            QLineEdit {
+                background-color: #404040;
+                border: 1px solid #666666;
+                border-radius: 4px;
                 padding: 6px;
+                color: #ffffff;
                 font-size: 11px;
-                min-width: 150px;
+                min-height: 20px;
             }
-            QComboBox:hover {
-                border-color: #58a6ff;
+            QLineEdit:focus {
+                border: 2px solid #0078d4;
+            }
+            QComboBox {
+                background-color: #404040;
+                border: 1px solid #666666;
+                border-radius: 4px;
+                padding: 6px;
+                color: #ffffff;
+                font-size: 11px;
+                min-height: 20px;
+            }
+            QComboBox:focus {
+                border: 2px solid #0078d4;
             }
             QComboBox::drop-down {
                 border: none;
+                width: 20px;
             }
             QComboBox::down-arrow {
                 image: none;
                 border-left: 5px solid transparent;
                 border-right: 5px solid transparent;
-                border-top: 5px solid #7d8590;
+                border-top: 5px solid #ffffff;
                 margin-right: 5px;
             }
-        """)
-        
-        max_videos_layout.addWidget(max_videos_label)
-        max_videos_layout.addWidget(self.max_videos_spin)
-        max_videos_layout.addStretch()
-        
-        # Sort order
-        sort_layout = QHBoxLayout()
-        sort_label = QLabel("Download order:")
-        sort_label.setStyleSheet("color: #f0f6fc; font-size: 11px; font-weight: bold;")
-        
-        self.sort_combo = QComboBox()
-        self.sort_combo.addItems(["Newest first", "Oldest first", "Most popular"])
-        self.sort_combo.setStyleSheet(self.max_videos_spin.styleSheet())
-        
-        sort_layout.addWidget(sort_label)
-        sort_layout.addWidget(self.sort_combo)
-        sort_layout.addStretch()
-        
-        options_layout.addLayout(max_videos_layout)
-        options_layout.addLayout(sort_layout)
-        
-        layout.addWidget(options_frame)
-        
-        # Video preview list
-        preview_label = QLabel("Video Preview:")
-        preview_label.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        preview_label.setStyleSheet("color: #58a6ff; font-size: 11px; font-weight: bold;")
-        layout.addWidget(preview_label)
-        
-        # Scrollable video list
-        self.video_list = QScrollArea()
-        self.video_list.setWidgetResizable(True)
-        self.video_list.setFixedHeight(200)
-        self.video_list.setStyleSheet("""
-            QScrollArea {
-                background: #21262d;
-                border: 1px solid #30363d;
+            QCheckBox {
+                color: #ffffff;
+                font-size: 11px;
+                spacing: 8px;
+                padding: 4px;
+            }
+            QCheckBox::indicator {
+                width: 16px;
+                height: 16px;
+                border: 1px solid #666666;
+                border-radius: 3px;
+                background-color: #404040;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #0078d4;
+                border: 1px solid #0078d4;
+            }
+            QCheckBox::indicator:checked::after {
+                content: "✓";
+                color: #ffffff;
+                font-weight: bold;
+            }
+            QPushButton {
+                background-color: #0078d4;
+                color: #ffffff;
+                border: none;
                 border-radius: 6px;
+                padding: 10px 20px;
+                font-size: 12px;
+                font-weight: bold;
+                min-width: 80px;
             }
-            QScrollBar:vertical {
-                background: #161b22;
-                width: 8px;
-                border-radius: 4px;
+            QPushButton:hover {
+                background-color: #106ebe;
             }
-            QScrollBar::handle:vertical {
-                background: #30363d;
-                border-radius: 4px;
-                min-height: 20px;
+            QPushButton:pressed {
+                background-color: #005a9e;
             }
-            QScrollBar::handle:vertical:hover {
-                background: #58a6ff;
+            QPushButton#cancelButton {
+                background-color: #666666;
+            }
+            QPushButton#cancelButton:hover {
+                background-color: #777777;
             }
         """)
         
-        self.populate_video_list()
-        layout.addWidget(self.video_list)
+        main_layout = QVBoxLayout(self)
+        main_layout.setSpacing(15)
+        main_layout.setContentsMargins(20, 20, 20, 20)
         
-        # Action buttons
+        # Header
+        header = QLabel(f"Profile: {self.profile_info.get('profile_name', 'Settings')}")
+        header.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        header.setStyleSheet("font-size: 16px; font-weight: bold; padding: 10px;")
+        main_layout.addWidget(header)
+        
+        # Create UI elements first
+        self.create_ui_elements()
+        
+        # Load saved settings
+        self.load_settings()
+        
+        # Create tabbed interface for better organization
+        tab_widget = QTabWidget()
+        
+        # Tab 1: Basic Settings
+        basic_tab = QWidget()
+        basic_layout = QHBoxLayout(basic_tab)
+        basic_layout.setSpacing(20)
+        basic_layout.setContentsMargins(15, 15, 15, 15)
+        basic_layout.addWidget(self.create_basic_column())
+        basic_layout.addWidget(self.create_quality_column())
+        tab_widget.addTab(basic_tab, "Basic Settings")
+        
+        # Tab 2: Advanced Filters (3-panel layout)
+        filters_tab = QWidget()
+        filters_layout = QHBoxLayout(filters_tab)
+        filters_layout.setSpacing(15)
+        filters_layout.setContentsMargins(15, 15, 15, 15)
+        filters_layout.addWidget(self.create_engagement_panel())
+        filters_layout.addWidget(self.create_content_panel())
+        filters_layout.addWidget(self.create_advanced_options_panel())
+        tab_widget.addTab(filters_tab, "Advanced Filters")
+        
+        # Tab 3: Download Options
+        options_tab = QWidget()
+        options_layout = QVBoxLayout(options_tab)
+        options_layout.setContentsMargins(15, 15, 15, 15)
+        options_layout.addWidget(self.create_download_options_column())
+        options_layout.addStretch()
+        tab_widget.addTab(options_tab, "Download Options")
+        
+        main_layout.addWidget(tab_widget)
+        
+        # Buttons
         button_layout = QHBoxLayout()
-        button_layout.setSpacing(10)
+        button_layout.addStretch()
         
         cancel_btn = QPushButton("Cancel")
+        cancel_btn.setObjectName("cancelButton")
         cancel_btn.clicked.connect(self.reject)
-        self.style_button_secondary(cancel_btn)
         
         download_btn = QPushButton("Start Download")
-        download_btn.clicked.connect(self.accept)
-        self.style_button_primary(download_btn)
+        download_btn.clicked.connect(self.accept_and_save)
         
-        button_layout.addStretch()
         button_layout.addWidget(cancel_btn)
         button_layout.addWidget(download_btn)
-        
-        layout.addLayout(button_layout)
+        main_layout.addLayout(button_layout)
     
-    def populate_video_list(self):
-        """Populate the video preview list"""
-        container = QWidget()
-        container_layout = QVBoxLayout(container)
-        container_layout.setSpacing(4)
-        container_layout.setContentsMargins(8, 8, 8, 8)
-        
-        videos = self.profile_info.get('videos', [])[:10]  # Show first 10 for preview
-        
-        if not videos:
-            no_videos_label = QLabel("No videos found in this profile")
-            no_videos_label.setStyleSheet("color: #7d8590; font-style: italic; padding: 20px;")
-            no_videos_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            container_layout.addWidget(no_videos_label)
+    def create_ui_elements(self):
+        """Create all form elements"""
+        # Dropdowns
+        self.max_videos_spin = QComboBox()
+        total_found = self.profile_info.get('total_found', 0)
+        options = ["10", "25", "50", "100", "200"]
+        if total_found > 0:
+            options.append(f"All ({total_found})")
         else:
-            for i, video in enumerate(videos):
-                video_frame = self.create_video_preview_item(video, i + 1)
-                container_layout.addWidget(video_frame)
-            
-            if len(self.profile_info.get('videos', [])) > 10:
-                more_label = QLabel(f"... and {len(self.profile_info.get('videos', [])) - 10} more videos")
-                more_label.setStyleSheet("color: #7d8590; font-style: italic; padding: 8px; text-align: center;")
-                more_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                container_layout.addWidget(more_label)
+            options.append("All available")
+        self.max_videos_spin.addItems(options)
         
-        self.video_list.setWidget(container)
+        self.sort_combo = QComboBox()
+        self.sort_combo.addItems(["Newest first", "Oldest first", "Most popular", "Most liked", "Most commented", "Most shared"])
+        
+        self.quality_combo = QComboBox()
+        self.quality_combo.addItems(["best", "8K", "4K", "2K", "1080p", "720p", "480p", "360p"])
+        
+        self.format_combo = QComboBox()
+        self.format_combo.addItems(["Force H.264 (Compatible)", "mp4 (H.264)", "webm", "any"])
+        
+        # View count filters
+        self.min_views_input = QLineEdit()
+        self.min_views_input.setPlaceholderText("e.g., 1M or 1000000")
+        
+        self.max_views_input = QLineEdit()
+        self.max_views_input.setPlaceholderText("e.g., 10M or 10000000")
+        
+        # Like count filters
+        self.min_likes_input = QLineEdit()
+        self.min_likes_input.setPlaceholderText("e.g., 50K or 50000")
+        
+        self.max_likes_input = QLineEdit()
+        self.max_likes_input.setPlaceholderText("e.g., 1M or 1000000")
+        
+        # Comment count filters
+        self.min_comments_input = QLineEdit()
+        self.min_comments_input.setPlaceholderText("e.g., 100 or 1K")
+        
+        self.max_comments_input = QLineEdit()
+        self.max_comments_input.setPlaceholderText("e.g., 10K or 10000")
+        
+        # Share count filters
+        self.min_shares_input = QLineEdit()
+        self.min_shares_input.setPlaceholderText("e.g., 50 or 1K")
+        
+        self.max_shares_input = QLineEdit()
+        self.max_shares_input.setPlaceholderText("e.g., 5K or 5000")
+        
+        # Duration filters
+        self.min_duration_input = QLineEdit()
+        self.min_duration_input.setPlaceholderText("e.g., 30 (seconds)")
+        
+        self.max_duration_input = QLineEdit()
+        self.max_duration_input.setPlaceholderText("e.g., 300 (seconds)")
+        
+        # Checkboxes
+        self.audio_only_cb = QCheckBox("Audio Only (MP3)")
+        self.subtitles_cb = QCheckBox("Download Subtitles")
+        self.mute_video_cb = QCheckBox("Mute Video")
+        self.create_subfolder_cb = QCheckBox("Create Subfolder")
+        self.create_subfolder_cb.setChecked(True)
+        
+        # Advanced filter checkboxes
+        self.filter_verified_cb = QCheckBox("Verified accounts only")
+        self.filter_trending_cb = QCheckBox("Trending videos only")
+        self.exclude_shorts_cb = QCheckBox("Exclude short videos (<60s)")
+        self.exclude_long_cb = QCheckBox("Exclude long videos (>10min)")
+        
+        # Mutual exclusion
+        self.audio_only_cb.toggled.connect(lambda checked: self.mute_video_cb.setEnabled(not checked))
+        self.mute_video_cb.toggled.connect(lambda checked: self.audio_only_cb.setEnabled(not checked))
     
-    def create_video_preview_item(self, video, index):
-        """Create a preview item for a video"""
-        frame = QFrame()
-        frame.setStyleSheet("""
-            QFrame {
-                background: rgba(33, 38, 45, 0.5);
-                border: 1px solid #30363d;
-                border-radius: 4px;
-                margin: 1px;
-                padding: 8px;
-            }
-            QFrame:hover {
-                border-color: #58a6ff;
-                background: rgba(88, 166, 255, 0.1);
-            }
-        """)
+    def create_basic_column(self):
+        """Create basic settings column"""
+        group = QGroupBox("Basic Settings")
+        layout = QVBoxLayout(group)
+        layout.setSpacing(12)
+        layout.setContentsMargins(15, 20, 15, 15)
         
-        layout = QHBoxLayout(frame)
-        layout.setContentsMargins(8, 6, 8, 6)
+        # Max videos
+        max_label = QLabel("Maximum Videos:")
+        max_label.setStyleSheet("font-weight: bold;")
+        layout.addWidget(max_label)
+        layout.addWidget(self.max_videos_spin)
+        
+        # Add spacing
+        layout.addSpacing(15)
+        
+        # Sort order
+        sort_label = QLabel("Download Order:")
+        sort_label.setStyleSheet("font-weight: bold;")
+        layout.addWidget(sort_label)
+        layout.addWidget(self.sort_combo)
+        
+        layout.addStretch()
+        return group
+    
+    def create_quality_column(self):
+        """Create quality & format column"""
+        group = QGroupBox("Quality & Format")
+        layout = QVBoxLayout(group)
+        layout.setSpacing(12)
+        layout.setContentsMargins(15, 20, 15, 15)
+        
+        # Quality
+        quality_label = QLabel("Video Quality:")
+        quality_label.setStyleSheet("font-weight: bold;")
+        layout.addWidget(quality_label)
+        layout.addWidget(self.quality_combo)
+        
+        # Add spacing
+        layout.addSpacing(15)
+        
+        # Format
+        format_label = QLabel("Video Format:")
+        format_label.setStyleSheet("font-weight: bold;")
+        layout.addWidget(format_label)
+        layout.addWidget(self.format_combo)
+        
+        layout.addStretch()
+        return group
+    
+    def create_engagement_panel(self):
+        """Create Panel 1: Engagement Filters (Views & Likes)"""
+        group = QGroupBox("Engagement Filters")
+        layout = QVBoxLayout(group)
+        layout.setSpacing(8)
+        layout.setContentsMargins(12, 15, 12, 12)
+        
+        # View count filters
+        view_label = QLabel("View Count Range:")
+        view_label.setStyleSheet("font-weight: bold; margin-top: 5px;")
+        layout.addWidget(view_label)
+        
+        min_views_label = QLabel("Min Views:")
+        layout.addWidget(min_views_label)
+        layout.addWidget(self.min_views_input)
+        
+        max_views_label = QLabel("Max Views:")
+        layout.addWidget(max_views_label)
+        layout.addWidget(self.max_views_input)
+        
+        # Add spacing
+        layout.addSpacing(12)
+        
+        # Like count filters
+        like_label = QLabel("Like Count Range:")
+        like_label.setStyleSheet("font-weight: bold; margin-top: 5px;")
+        layout.addWidget(like_label)
+        
+        min_likes_label = QLabel("Min Likes:")
+        layout.addWidget(min_likes_label)
+        layout.addWidget(self.min_likes_input)
+        
+        max_likes_label = QLabel("Max Likes:")
+        layout.addWidget(max_likes_label)
+        layout.addWidget(self.max_likes_input)
+        
+        layout.addStretch()
+        return group
+    
+    def create_content_panel(self):
+        """Create Panel 2: Content Filters (Comments, Shares & Duration)"""
+        group = QGroupBox("Content Filters")
+        layout = QVBoxLayout(group)
+        layout.setSpacing(8)
+        layout.setContentsMargins(12, 15, 12, 12)
+        
+        # Comment count filters
+        comment_label = QLabel("Comment Count Range:")
+        comment_label.setStyleSheet("font-weight: bold; margin-top: 5px;")
+        layout.addWidget(comment_label)
+        
+        min_comments_label = QLabel("Min Comments:")
+        layout.addWidget(min_comments_label)
+        layout.addWidget(self.min_comments_input)
+        
+        max_comments_label = QLabel("Max Comments:")
+        layout.addWidget(max_comments_label)
+        layout.addWidget(self.max_comments_input)
+        
+        # Add spacing
+        layout.addSpacing(10)
+        
+        # Share count filters
+        share_label = QLabel("Share Count Range:")
+        share_label.setStyleSheet("font-weight: bold; margin-top: 5px;")
+        layout.addWidget(share_label)
+        
+        min_shares_label = QLabel("Min Shares:")
+        layout.addWidget(min_shares_label)
+        layout.addWidget(self.min_shares_input)
+        
+        max_shares_label = QLabel("Max Shares:")
+        layout.addWidget(max_shares_label)
+        layout.addWidget(self.max_shares_input)
+        
+        layout.addStretch()
+        return group
+    
+    def create_advanced_options_panel(self):
+        """Create Panel 3: Advanced Options (Verified, Trending, Duration exclusions)"""
+        group = QGroupBox("Advanced Options")
+        layout = QVBoxLayout(group)
+        layout.setSpacing(10)
+        layout.setContentsMargins(12, 15, 12, 12)
+        
+        # Content type filters
+        type_label = QLabel("Content Type Filters:")
+        type_label.setStyleSheet("font-weight: bold; margin-top: 5px;")
+        layout.addWidget(type_label)
+        
+        layout.addWidget(self.filter_verified_cb)
+        layout.addWidget(self.filter_trending_cb)
+        
+        # Add spacing
+        layout.addSpacing(12)
+        
+        # Duration exclusions
+        exclusion_label = QLabel("Duration Exclusions:")
+        exclusion_label.setStyleSheet("font-weight: bold; margin-top: 5px;")
+        layout.addWidget(exclusion_label)
+        
+        layout.addWidget(self.exclude_shorts_cb)
+        layout.addWidget(self.exclude_long_cb)
+        
+        layout.addStretch()
+        return group
+    
+    def create_download_options_column(self):
+        """Create download options column"""
+        group = QGroupBox("Download Options")
+        layout = QVBoxLayout(group)
+        layout.setSpacing(12)
+        layout.setContentsMargins(15, 20, 15, 15)
+        
+        # Audio/Video options
+        media_label = QLabel("Media Options:")
+        media_label.setStyleSheet("font-weight: bold; margin-top: 5px;")
+        layout.addWidget(media_label)
+        layout.addWidget(self.audio_only_cb)
+        layout.addWidget(self.subtitles_cb)
+        layout.addWidget(self.mute_video_cb)
+        
+        # Add spacing
+        layout.addSpacing(15)
+        
+        # File organization
+        org_label = QLabel("File Organization:")
+        org_label.setStyleSheet("font-weight: bold; margin-top: 5px;")
+        layout.addWidget(org_label)
+        layout.addWidget(self.create_subfolder_cb)
+        
+        layout.addStretch()
+        return group
+    
+    def create_advanced_column(self):
+        """Create advanced options column (legacy - kept for compatibility)"""
+        group = QGroupBox("Advanced Options")
+        layout = QVBoxLayout(group)
         layout.setSpacing(10)
         
-        # Video number
-        number_label = QLabel(f"{index}.")
-        number_label.setStyleSheet("color: #58a6ff; font-weight: bold; font-size: 10px; min-width: 20px;")
+        # View filters section
+        filters_label = QLabel("View Count Filters:")
+        layout.addWidget(filters_label)
         
-        # Video info
-        info_layout = QVBoxLayout()
-        info_layout.setSpacing(2)
+        # Min views
+        min_label = QLabel("Min Views:")
+        layout.addWidget(min_label)
+        layout.addWidget(self.min_views_input)
         
-        title = video.get('title', 'Unknown Title')
-        if len(title) > 60:
-            title = title[:60] + "..."
+        # Max views
+        max_label = QLabel("Max Views:")
+        layout.addWidget(max_label)
+        layout.addWidget(self.max_views_input)
         
-        title_label = QLabel(title)
-        title_label.setStyleSheet("color: #f0f6fc; font-size: 10px; font-weight: bold;")
+        # Download options section
+        options_label = QLabel("Download Options:")
+        layout.addWidget(options_label)
         
-        # Duration and uploader
-        duration = video.get('duration', 0)
-        duration_str = f"{int(duration)//60}:{int(duration)%60:02d}" if duration else "Unknown"
+        layout.addWidget(self.audio_only_cb)
+        layout.addWidget(self.subtitles_cb)
+        layout.addWidget(self.mute_video_cb)
+        layout.addWidget(self.create_subfolder_cb)
         
-        details_label = QLabel(f"Duration: {duration_str} - Uploader: {video.get('uploader', 'Unknown')}")
-        details_label.setStyleSheet("color: #7d8590; font-size: 9px;")
+        layout.addStretch()
+        return group
+    
+    def load_settings(self):
+        """Load saved settings from QSettings"""
+        settings = QSettings("VideoDownloader", "ProfileDownloadSettings")
         
-        info_layout.addWidget(title_label)
-        info_layout.addWidget(details_label)
+        # Load dropdown selections
+        max_videos = settings.value("max_videos", "50")
+        if max_videos in [self.max_videos_spin.itemText(i) for i in range(self.max_videos_spin.count())]:
+            self.max_videos_spin.setCurrentText(max_videos)
         
-        layout.addWidget(number_label)
-        layout.addLayout(info_layout, 1)
+        sort_order = settings.value("sort_order", "Newest first")
+        if sort_order in [self.sort_combo.itemText(i) for i in range(self.sort_combo.count())]:
+            self.sort_combo.setCurrentText(sort_order)
         
-        return frame
+        quality = settings.value("quality", "best")
+        if quality in [self.quality_combo.itemText(i) for i in range(self.quality_combo.count())]:
+            self.quality_combo.setCurrentText(quality)
+        
+        format_type = settings.value("format", "Force H.264 (Compatible)")
+        if format_type in [self.format_combo.itemText(i) for i in range(self.format_combo.count())]:
+            self.format_combo.setCurrentText(format_type)
+        
+        # Load engagement filter inputs
+        self.min_views_input.setText(settings.value("min_views", "", type=str))
+        self.max_views_input.setText(settings.value("max_views", "", type=str))
+        self.min_likes_input.setText(settings.value("min_likes", "", type=str))
+        self.max_likes_input.setText(settings.value("max_likes", "", type=str))
+        self.min_comments_input.setText(settings.value("min_comments", "", type=str))
+        self.max_comments_input.setText(settings.value("max_comments", "", type=str))
+        self.min_shares_input.setText(settings.value("min_shares", "", type=str))
+        self.max_shares_input.setText(settings.value("max_shares", "", type=str))
+        
+        # Load content filter inputs
+        self.min_duration_input.setText(settings.value("min_duration", "", type=str))
+        self.max_duration_input.setText(settings.value("max_duration", "", type=str))
+        
+        # Load checkboxes
+        self.audio_only_cb.setChecked(settings.value("audio_only", False, type=bool))
+        self.subtitles_cb.setChecked(settings.value("subtitles", False, type=bool))
+        self.mute_video_cb.setChecked(settings.value("mute_video", False, type=bool))
+        self.create_subfolder_cb.setChecked(settings.value("create_subfolder", True, type=bool))
+        
+        # Load advanced filter checkboxes
+        self.filter_verified_cb.setChecked(settings.value("filter_verified", False, type=bool))
+        self.filter_trending_cb.setChecked(settings.value("filter_trending", False, type=bool))
+        self.exclude_shorts_cb.setChecked(settings.value("exclude_shorts", False, type=bool))
+        self.exclude_long_cb.setChecked(settings.value("exclude_long", False, type=bool))
+    
+    def save_settings(self):
+        """Save current settings to QSettings"""
+        settings = QSettings("VideoDownloader", "ProfileDownloadSettings")
+        
+        # Save dropdown selections
+        settings.setValue("max_videos", self.max_videos_spin.currentText())
+        settings.setValue("sort_order", self.sort_combo.currentText())
+        settings.setValue("quality", self.quality_combo.currentText())
+        settings.setValue("format", self.format_combo.currentText())
+        
+        # Save engagement filter inputs
+        settings.setValue("min_views", self.min_views_input.text().strip())
+        settings.setValue("max_views", self.max_views_input.text().strip())
+        settings.setValue("min_likes", self.min_likes_input.text().strip())
+        settings.setValue("max_likes", self.max_likes_input.text().strip())
+        settings.setValue("min_comments", self.min_comments_input.text().strip())
+        settings.setValue("max_comments", self.max_comments_input.text().strip())
+        settings.setValue("min_shares", self.min_shares_input.text().strip())
+        settings.setValue("max_shares", self.max_shares_input.text().strip())
+        
+        # Save content filter inputs
+        settings.setValue("min_duration", self.min_duration_input.text().strip())
+        settings.setValue("max_duration", self.max_duration_input.text().strip())
+        
+        # Save checkboxes
+        settings.setValue("audio_only", self.audio_only_cb.isChecked())
+        settings.setValue("subtitles", self.subtitles_cb.isChecked())
+        settings.setValue("mute_video", self.mute_video_cb.isChecked())
+        settings.setValue("create_subfolder", self.create_subfolder_cb.isChecked())
+        
+        # Save advanced filter checkboxes
+        settings.setValue("filter_verified", self.filter_verified_cb.isChecked())
+        settings.setValue("filter_trending", self.filter_trending_cb.isChecked())
+        settings.setValue("exclude_shorts", self.exclude_shorts_cb.isChecked())
+        settings.setValue("exclude_long", self.exclude_long_cb.isChecked())
+        
+        # Force synchronization to ensure settings are written
+        settings.sync()
+    
+    def accept_and_save(self):
+        """Save settings and accept dialog"""
+        self.save_settings()
+        self.accept()
     
     def get_download_settings(self):
         """Get the selected download settings"""
@@ -1657,49 +1967,80 @@ class ProfileDownloadDialog(QDialog):
             except ValueError:
                 max_videos = None
         
+        # Helper function to parse count values with K/M suffixes
+        def parse_count(text):
+            if not text:
+                return None
+            try:
+                if text.lower().endswith('k'):
+                    return int(float(text[:-1]) * 1000)
+                elif text.lower().endswith('m'):
+                    return int(float(text[:-1]) * 1000000)
+                else:
+                    return int(text)
+            except ValueError:
+                return None
+        
+        # Parse all engagement filters
+        min_views = parse_count(self.min_views_input.text().strip())
+        max_views = parse_count(self.max_views_input.text().strip())
+        min_likes = parse_count(self.min_likes_input.text().strip())
+        max_likes = parse_count(self.max_likes_input.text().strip())
+        min_comments = parse_count(self.min_comments_input.text().strip())
+        max_comments = parse_count(self.max_comments_input.text().strip())
+        min_shares = parse_count(self.min_shares_input.text().strip())
+        max_shares = parse_count(self.max_shares_input.text().strip())
+        
+        # Parse duration filters (in seconds)
+        min_duration = None
+        max_duration = None
+        
+        min_duration_text = self.min_duration_input.text().strip()
+        if min_duration_text:
+            try:
+                min_duration = int(min_duration_text)
+            except ValueError:
+                min_duration = None
+        
+        max_duration_text = self.max_duration_input.text().strip()
+        if max_duration_text:
+            try:
+                max_duration = int(max_duration_text)
+            except ValueError:
+                max_duration = None
+        
         return {
             'max_videos': max_videos,
             'sort_order': self.sort_combo.currentText(),
+            'quality': self.quality_combo.currentText(),
+            'format': self.format_combo.currentText(),
+            
+            # Engagement filters
+            'min_views': min_views,
+            'max_views': max_views,
+            'min_likes': min_likes,
+            'max_likes': max_likes,
+            'min_comments': min_comments,
+            'max_comments': max_comments,
+            'min_shares': min_shares,
+            'max_shares': max_shares,
+            
+            # Content filters
+            'min_duration': min_duration,
+            'max_duration': max_duration,
+            'filter_verified': self.filter_verified_cb.isChecked(),
+            'filter_trending': self.filter_trending_cb.isChecked(),
+            'exclude_shorts': self.exclude_shorts_cb.isChecked(),
+            'exclude_long': self.exclude_long_cb.isChecked(),
+            
+            # Download options
+            'audio_only': self.audio_only_cb.isChecked(),
+            'subtitles': self.subtitles_cb.isChecked(),
+            'mute_video': self.mute_video_cb.isChecked(),
+            'create_subfolder': self.create_subfolder_cb.isChecked(),
+            
             'videos': self.profile_info.get('videos', [])
         }
-    
-    def style_button_primary(self, btn):
-        btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                    stop:0 #238636, stop:1 #2ea043);
-                color: white;
-                border: none;
-                border-radius: 0px;
-                font-size: 12px;
-                font-weight: bold;
-                padding: 8px 16px;
-                min-width: 120px;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                    stop:0 #2ea043, stop:1 #238636);
-            }
-        """)
-    
-    def style_button_secondary(self, btn):
-        btn.setStyleSheet("""
-            QPushButton {
-                background: rgba(33, 38, 45, 0.8);
-                color: #f0f6fc;
-                border: 2px solid #30363d;
-                border-radius: 0px;
-                font-size: 12px;
-                font-weight: bold;
-                padding: 8px 16px;
-                min-width: 80px;
-            }
-            QPushButton:hover {
-                border-color: #58a6ff;
-                background: rgba(22, 27, 34, 0.9);
-                color: #58a6ff;
-            }
-        """)
 
 
 class BatchCompleteDialog(QDialog):
@@ -2727,7 +3068,7 @@ class LicenseActivationDialog(QDialog):
         license_key = self.key_input.text().strip()
         
         if len(license_key) < 19:
-            self.status_label.setText("⚠️ Please enter a valid license key")
+            self.status_label.setText("[!] Please enter a valid license key")
             self.status_label.setStyleSheet("color: #d29922; font-size: 12px;")
             return
         
@@ -2741,7 +3082,7 @@ class LicenseActivationDialog(QDialog):
             result = self.license_client.validate(license_key)
             
             if result.get("valid"):
-                self.status_label.setText("✅ License activated successfully!")
+                self.status_label.setText("[OK] License activated successfully!")
                 self.status_label.setStyleSheet("color: #3fb950; font-size: 12px;")
                 self.activated = True
                 
@@ -2749,12 +3090,12 @@ class LicenseActivationDialog(QDialog):
                 QTimer.singleShot(1500, self.accept)
             else:
                 error = result.get("error", "Unknown error")
-                self.status_label.setText(f"❌ {error}")
+                self.status_label.setText(f"[X] {error}")
                 self.status_label.setStyleSheet("color: #f85149; font-size: 12px;")
                 self.activate_btn.setEnabled(True)
                 self.activate_btn.setText("Activate License")
         else:
-            self.status_label.setText("❌ License system not available")
+            self.status_label.setText("[X] License system not available")
             self.status_label.setStyleSheet("color: #f85149; font-size: 12px;")
             self.activate_btn.setEnabled(True)
             self.activate_btn.setText("Activate License")
@@ -3700,7 +4041,35 @@ class VideoDownloader:
             
             # Platform-specific optimizations
             if platform == 'TikTok':
-                # TikTok-specific options for better profile extraction
+                # Try enhanced TikTok profile extraction first
+                try:
+                    import sys
+                    import os
+                    sys.path.append(os.path.dirname(__file__))
+                    
+                    from tiktok_profile_fix import TikTokProfileExtractor
+                    
+                    print("[*] Using enhanced TikTok profile extraction...")
+                    extractor = TikTokProfileExtractor()
+                    result = extractor.extract_profile(profile_url, max_videos)
+                    
+                    if result.get('success'):
+                        print(f"[OK] Enhanced TikTok extraction succeeded! Found {len(result['videos'])} videos")
+                        return result
+                    else:
+                        print(f"[X] Enhanced TikTok extraction failed: {result.get('error', 'Unknown error')}")
+                        if 'suggestions' in result:
+                            print("[!] Suggestions:")
+                            for suggestion in result['suggestions']:
+                                print(f"   {suggestion}")
+                        # Continue with fallback method below
+                        
+                except ImportError as e:
+                    print(f"[!] Enhanced TikTok extractor not available: {e}")
+                except Exception as e:
+                    print(f"[!] Enhanced TikTok extractor error: {e}")
+                
+                # TikTok-specific options for better profile extraction (fallback)
                 opts.update({
                     'extractor_args': {
                         'tiktok': {
@@ -3999,7 +4368,8 @@ class VideoDownloader:
         
         # For TikTok, use description (full caption) instead of title (truncated)
         if 'TikTok' in platform:
-            safe_template = str(self.output_dir / '%(description)s.%(ext)s')
+            # Use a custom template that cleans the description for filename
+            safe_template = str(self.output_dir / '%(description).80s.%(ext)s')
         else:
             safe_template = str(self.output_dir / '%(title)s.%(ext)s')
         
@@ -4018,6 +4388,11 @@ class VideoDownloader:
             'buffersize': 1024 * 16,     # 16KB buffer for smoother downloads
             'http_chunk_size': 10485760, # 10MB chunks for better reliability
         }
+        
+        # Add TikTok-specific filename sanitization
+        if 'TikTok' in platform:
+            opts['restrictfilenames'] = False  # Allow Unicode characters and spaces
+            opts['windowsfilenames'] = False   # Don't replace spaces with underscores
         
         # Note: Don't use cookiesfrombrowser here - it causes errors when browser is open
         # The direct Facebook downloader handles cookies separately
@@ -4214,6 +4589,20 @@ class VideoDownloader:
         
         if subtitle:
             opts['writesubtitles'] = True
+            opts['writeautomaticsub'] = True
+            
+            # TikTok-specific subtitle options
+            platform = self.detect_platform(url)
+            if 'TikTok' in platform:
+                # TikTok often has auto-generated captions and user-added text
+                opts['subtitleslangs'] = ['en', 'en-US', 'auto']
+                opts['writeinfojson'] = True  # Get metadata that might contain captions
+                # Try to extract text overlay/captions from TikTok
+                opts['extractor_args'] = {
+                    'tiktok': {
+                        'webpage_url_basename': 'video'
+                    }
+                }
         
         try:
             if callback:
@@ -4229,18 +4618,87 @@ class VideoDownloader:
                     if callback:
                         callback("[*] Processing TikTok with seamless integration...")
                     
+                    # First try to extract captions/text if subtitle is enabled
+                    if subtitle:
+                        try:
+                            if callback:
+                                callback("[*] Extracting TikTok captions...")
+                            
+                            # Extract video info to get description/captions
+                            with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
+                                info = ydl.extract_info(url, download=False)
+                                
+                                # Extract text content from TikTok
+                                caption_text = ""
+                                if info.get('description'):
+                                    caption_text += info['description'] + "\n"
+                                if info.get('title'):
+                                    caption_text += info['title'] + "\n"
+                                
+                                # Save as subtitle file if we have text
+                                if caption_text.strip():
+                                    # Generate subtitle filename
+                                    video_id = re.search(r'/video/(\d+)', url)
+                                    if video_id:
+                                        subtitle_filename = f"tiktok_{video_id.group(1)}.srt"
+                                    else:
+                                        import time
+                                        subtitle_filename = f"tiktok_{int(time.time())}.srt"
+                                    
+                                    subtitle_path = self.output_dir / subtitle_filename
+                                    
+                                    # Create simple SRT format
+                                    srt_content = f"""1
+00:00:00,000 --> 00:00:10,000
+{caption_text.strip()}
+
+"""
+                                    
+                                    with open(subtitle_path, 'w', encoding='utf-8') as f:
+                                        f.write(srt_content)
+                                    
+                                    if callback:
+                                        callback(f"[OK] TikTok captions saved: {subtitle_filename}")
+                                        
+                        except Exception as e:
+                            if callback:
+                                callback(f"[!] Caption extraction failed: {str(e)[:50]}...")
+                    
                     # Use the seamless TikTok downloader directly
                     try:
                         from tiktok_seamless_integration import integrate_tiktok_download
                         
-                        # Generate output filename
-                        import re
-                        video_id = re.search(r'/video/(\d+)', url)
-                        if video_id:
-                            output_filename = f"tiktok_{video_id.group(1)}.mp4"
-                        else:
-                            import time
-                            output_filename = f"tiktok_{int(time.time())}.mp4"
+                        # Extract video info to get caption for filename
+                        try:
+                            with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
+                                info = ydl.extract_info(url, download=False)
+                                
+                                # Get caption/description for filename
+                                caption = info.get('description', '').strip()
+                                if not caption:
+                                    caption = info.get('title', '').strip()
+                                
+                                # Clean caption for filename
+                                if caption:
+                                    safe_caption = self._clean_tiktok_caption_for_filename(caption)
+                                    
+                                    if safe_caption:
+                                        output_filename = f"{safe_caption}.mp4"
+                                    else:
+                                        # Fallback to video ID
+                                        video_id = re.search(r'/video/(\d+)', url)
+                                        output_filename = f"tiktok_{video_id.group(1)}.mp4" if video_id else f"tiktok_{int(time.time())}.mp4"
+                                else:
+                                    # Fallback to video ID
+                                    video_id = re.search(r'/video/(\d+)', url)
+                                    output_filename = f"tiktok_{video_id.group(1)}.mp4" if video_id else f"tiktok_{int(time.time())}.mp4"
+                                    
+                        except Exception as e:
+                            if callback:
+                                callback(f"[!] Failed to extract caption for filename: {str(e)[:50]}...")
+                            # Fallback to video ID
+                            video_id = re.search(r'/video/(\d+)', url)
+                            output_filename = f"tiktok_{video_id.group(1)}.mp4" if video_id else f"tiktok_{int(time.time())}.mp4"
                         
                         output_path = self.output_dir / output_filename
                         
@@ -4249,6 +4707,30 @@ class VideoDownloader:
                         
                         if success and output_path.exists():
                             downloaded_file = output_path
+                            
+                            # Extract OCR captions if subtitle is enabled
+                            if subtitle:
+                                try:
+                                    if callback:
+                                        callback("[*] Extracting text overlays from video...")
+                                    
+                                    from tiktok_ocr_captions import extract_tiktok_captions
+                                    captions = extract_tiktok_captions(output_path, callback)
+                                    
+                                    if captions:
+                                        if callback:
+                                            callback(f"[OK] Extracted {len(captions)} text overlays from video")
+                                    else:
+                                        if callback:
+                                            callback("[!] No text overlays found in video")
+                                            
+                                except ImportError:
+                                    if callback:
+                                        callback("[!] OCR libraries not installed. Install: pip install opencv-python pytesseract easyocr")
+                                except Exception as e:
+                                    if callback:
+                                        callback(f"[!] OCR extraction failed: {str(e)[:50]}...")
+                            
                             if callback:
                                 callback(f"[OK] TikTok video downloaded successfully!")
                             return {'success': True, 'file_path': downloaded_file}
@@ -4263,13 +4745,49 @@ class VideoDownloader:
                         # Fallback if seamless integration not available
                         if callback:
                             callback("[!] TikTok integration not available")
-                        pass
+                        # Continue to standard yt-dlp approach below
                 
                 # For non-TikTok or if seamless failed, use standard approach
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     # Extract info to get the final filename
                     info = ydl.extract_info(url, download=False)
                     expected_filename = ydl.prepare_filename(info)
+                    
+                    # For TikTok with subtitles, try to extract additional caption info
+                    if subtitle and 'TikTok' in platform:
+                        try:
+                            if callback:
+                                callback("[*] Extracting TikTok text content...")
+                            
+                            # Create enhanced subtitle from TikTok metadata
+                            caption_parts = []
+                            if info.get('description'):
+                                caption_parts.append(f"Description: {info['description']}")
+                            if info.get('title') and info['title'] != info.get('description'):
+                                caption_parts.append(f"Title: {info['title']}")
+                            if info.get('uploader'):
+                                caption_parts.append(f"Creator: @{info['uploader']}")
+                            
+                            if caption_parts:
+                                # Create subtitle file with TikTok content
+                                base_name = Path(expected_filename).stem
+                                subtitle_path = self.output_dir / f"{base_name}.srt"
+                                
+                                srt_content = f"""1
+00:00:00,000 --> 00:00:05,000
+{chr(10).join(caption_parts)}
+
+"""
+                                
+                                with open(subtitle_path, 'w', encoding='utf-8') as f:
+                                    f.write(srt_content)
+                                
+                                if callback:
+                                    callback(f"[OK] TikTok text content saved as subtitle")
+                                    
+                        except Exception as e:
+                            if callback:
+                                callback(f"[!] TikTok text extraction failed: {str(e)[:50]}...")
                     
                     # Download the video
                     ydl.download([url])
@@ -4287,6 +4805,29 @@ class VideoDownloader:
                     # If not found, try the original expected filename
                     if not downloaded_file and Path(expected_filename).exists():
                         downloaded_file = Path(expected_filename)
+                    
+                    # Extract OCR captions for TikTok if subtitle is enabled and file was downloaded
+                    if subtitle and 'TikTok' in platform and downloaded_file and downloaded_file.exists():
+                        try:
+                            if callback:
+                                callback("[*] Extracting text overlays from TikTok video...")
+                            
+                            from tiktok_ocr_captions import extract_tiktok_captions
+                            captions = extract_tiktok_captions(downloaded_file, callback)
+                            
+                            if captions:
+                                if callback:
+                                    callback(f"[OK] Extracted {len(captions)} text overlays from video")
+                            else:
+                                if callback:
+                                    callback("[!] No text overlays found in video")
+                                    
+                        except ImportError:
+                            if callback:
+                                callback("[!] OCR libraries not installed. Install: pip install opencv-python pytesseract easyocr")
+                        except Exception as e:
+                            if callback:
+                                callback(f"[!] OCR extraction failed: {str(e)[:50]}...")
                         
             except Exception as format_error:
                 # If format selection fails, try with simpler format
@@ -4303,14 +4844,37 @@ class VideoDownloader:
                     try:
                         from tiktok_seamless_integration import integrate_tiktok_download
                         
-                        # Generate output filename
-                        import re
-                        video_id = re.search(r'/video/(\d+)', url)
-                        if video_id:
-                            output_filename = f"tiktok_{video_id.group(1)}.mp4"
-                        else:
-                            import time
-                            output_filename = f"tiktok_{int(time.time())}.mp4"
+                        # Extract video info to get caption for filename
+                        try:
+                            with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
+                                info = ydl.extract_info(url, download=False)
+                                
+                                # Get caption/description for filename
+                                caption = info.get('description', '').strip()
+                                if not caption:
+                                    caption = info.get('title', '').strip()
+                                
+                                # Clean caption for filename
+                                if caption:
+                                    safe_caption = self._clean_tiktok_caption_for_filename(caption)
+                                    
+                                    if safe_caption:
+                                        output_filename = f"{safe_caption}.mp4"
+                                    else:
+                                        # Fallback to video ID
+                                        video_id = re.search(r'/video/(\d+)', url)
+                                        output_filename = f"tiktok_{video_id.group(1)}.mp4" if video_id else f"tiktok_{int(time.time())}.mp4"
+                                else:
+                                    # Fallback to video ID
+                                    video_id = re.search(r'/video/(\d+)', url)
+                                    output_filename = f"tiktok_{video_id.group(1)}.mp4" if video_id else f"tiktok_{int(time.time())}.mp4"
+                                    
+                        except Exception as e:
+                            if callback:
+                                callback(f"[!] Failed to extract caption for filename: {str(e)[:50]}...")
+                            # Fallback to video ID
+                            video_id = re.search(r'/video/(\d+)', url)
+                            output_filename = f"tiktok_{video_id.group(1)}.mp4" if video_id else f"tiktok_{int(time.time())}.mp4"
                         
                         output_path = self.output_dir / output_filename
                         
@@ -4560,6 +5124,38 @@ class VideoDownloader:
                 callback(f"[X] Error: {friendly_error}")
             return {'success': False, 'error': friendly_error}
 
+    def _clean_tiktok_caption_for_filename(self, caption):
+        """Clean TikTok caption text for use as filename"""
+        if not caption:
+            return None
+        
+        # Remove common TikTok mentions that clutter filenames
+        import re
+        
+        # Remove mentions but keep hashtags
+        caption = re.sub(r'@\w+', '', caption)
+        
+        # Remove URLs
+        caption = re.sub(r'http[s]?://\S+', '', caption)
+        
+        # Remove extra whitespace and newlines
+        caption = re.sub(r'\s+', ' ', caption).strip()
+        
+        # Keep only alphanumeric, spaces, hyphens, hashtags
+        safe_caption = "".join(c for c in caption if c.isalnum() or c in (' ', '-', '#', '.')).strip()
+        
+        # Remove multiple consecutive spaces
+        safe_caption = re.sub(r' +', ' ', safe_caption)
+        
+        # Limit length to 80 characters
+        if len(safe_caption) > 80:
+            safe_caption = safe_caption[:80].rstrip(' ')
+        
+        # Ensure it's not empty and doesn't start/end with space
+        safe_caption = safe_caption.strip()
+        
+        return safe_caption if safe_caption else None
+
 
 class Worker(QThread):
     progress = pyqtSignal(str)
@@ -4646,11 +5242,15 @@ class Worker(QThread):
 
 
 class MainWindow(QMainWindow):
-    VERSION = "1.2.0"
+    VERSION = "1.2.1"
     APP_ID = None  # Unique installation ID
     
     def __init__(self):
         super().__init__()
+        
+        # Configure font for better Unicode support
+        self.setup_fonts()
+        
         self.dl = VideoDownloader()
         self.worker = None
         self.multi_worker = None  # For multiple downloads
@@ -4667,6 +5267,28 @@ class MainWindow(QMainWindow):
         
         # Add a small delay to ensure UI is fully ready, then retry setting directory
         QTimer.singleShot(100, self.retry_set_directory)
+    
+    def setup_fonts(self):
+        """Configure fonts for better Unicode support"""
+        try:
+            # Set default application font with Unicode support
+            app = QApplication.instance()
+            if app:
+                # Try to use a font that supports Unicode characters
+                font_families = ["Segoe UI", "Arial Unicode MS", "DejaVu Sans", "Liberation Sans", "Arial"]
+                
+                for font_family in font_families:
+                    font = QFont(font_family, 9)
+                    if font.exactMatch():
+                        app.setFont(font)
+                        break
+                else:
+                    # Fallback to default system font
+                    font = QFont()
+                    font.setPointSize(9)
+                    app.setFont(font)
+        except Exception as e:
+            print(f"[!] Font setup warning: {e}")
         
         # Check for FFmpeg and show info
         QTimer.singleShot(500, self.check_ffmpeg)
@@ -4895,13 +5517,13 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(30, 30, 30, 30)
         
         # Header
-        header = QLabel(f"🚀 New Version Available!")
+        header = QLabel(f"[!] New Version Available!")
         header.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
         header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(header)
         
         # Version info
-        version_info = QLabel(f"v{self.VERSION} → v{new_version}")
+        version_info = QLabel(f"v{self.VERSION} -> v{new_version}")
         version_info.setFont(QFont("Segoe UI", 14))
         version_info.setStyleSheet("color: #58a6ff;")
         version_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -5632,78 +6254,56 @@ class MainWindow(QMainWindow):
         
         # === DOWNLOAD OPTIONS SECTION ===
         options_frame = self.create_section("Download Options")
-        options_grid = QGridLayout()
-        options_grid.setSpacing(10)
-        options_grid.setColumnStretch(1, 1)
-        options_grid.setColumnStretch(3, 1)
-        options_grid.setColumnStretch(5, 1)
+        options_layout = QVBoxLayout()
+        options_layout.setSpacing(12)
         
-        # Quality, Format, Max Videos in one row
-        options_grid.addWidget(self.create_label("Quality:"), 0, 0)
-        self.profile_quality = QComboBox()
-        self.profile_quality.addItems(["best", "8K", "4K", "2K", "1080p", "720p", "480p", "360p"])
-        self.profile_quality.setFixedHeight(32)
-        self.style_combo(self.profile_quality)
-        self.profile_quality.currentTextChanged.connect(self.auto_save_settings)
-        options_grid.addWidget(self.profile_quality, 0, 1)
+        # Simple options row
+        options_row = QHBoxLayout()
+        options_row.setSpacing(12)
         
-        options_grid.addWidget(self.create_label("Format:"), 0, 2)
-        self.profile_format = QComboBox()
-        self.profile_format.addItems(["Force H.264 (Compatible)", "mp4 (H.264)", "webm", "any"])
-        self.profile_format.setFixedHeight(32)
-        self.style_combo(self.profile_format)
-        self.profile_format.currentTextChanged.connect(self.auto_save_settings)
-        options_grid.addWidget(self.profile_format, 0, 3)
-        
-        options_grid.addWidget(self.create_label("Max Videos:"), 0, 4)
-        self.profile_max_videos = QComboBox()
-        self.profile_max_videos.addItems(["10", "25", "50", "100", "All available"])
-        self.profile_max_videos.setCurrentText("50")
-        self.profile_max_videos.setFixedHeight(32)
-        self.style_combo(self.profile_max_videos)
-        self.profile_max_videos.currentTextChanged.connect(self.auto_save_settings)
-        options_grid.addWidget(self.profile_max_videos, 0, 5)
-        
-        # Checkboxes row
-        self.profile_audio_cb = QCheckBox("Audio Only (MP3)")
-        self.profile_subtitle_cb = QCheckBox("Download Subtitles")
-        self.profile_mute_cb = QCheckBox("Mute Video")
-        self.profile_create_subfolder_cb = QCheckBox("Create Subfolder")
-        self.profile_create_subfolder_cb.setChecked(True)
-        self.style_checkbox(self.profile_audio_cb)
-        self.style_checkbox(self.profile_subtitle_cb)
-        self.style_checkbox(self.profile_mute_cb)
-        self.style_checkbox(self.profile_create_subfolder_cb)
-        self.profile_audio_cb.toggled.connect(self.auto_save_settings)
-        self.profile_subtitle_cb.toggled.connect(self.auto_save_settings)
-        self.profile_mute_cb.toggled.connect(self.auto_save_settings)
-        self.profile_create_subfolder_cb.toggled.connect(self.auto_save_settings)
-        self.profile_audio_cb.toggled.connect(lambda checked: self.profile_mute_cb.setEnabled(not checked))
-        self.profile_mute_cb.toggled.connect(lambda checked: self.profile_audio_cb.setEnabled(not checked))
-        options_grid.addWidget(self.profile_audio_cb, 1, 0, 1, 1)
-        options_grid.addWidget(self.profile_subtitle_cb, 1, 1, 1, 1)
-        options_grid.addWidget(self.profile_mute_cb, 1, 2, 1, 1)
-        options_grid.addWidget(self.profile_create_subfolder_cb, 1, 3, 1, 3)
-        
-        # Output directory row
-        options_grid.addWidget(self.create_label("Save to:"), 2, 0)
-        output_row = QHBoxLayout()
+        # Output directory
+        options_row.addWidget(self.create_label("Save to:"))
         self.profile_output = QLineEdit()
         self.profile_output.setPlaceholderText("downloads/profiles")
         self.profile_output.setFixedHeight(32)
         self.style_input(self.profile_output)
         self.profile_output.textChanged.connect(self.auto_save_settings)
+        options_row.addWidget(self.profile_output)
         
         browse_btn = QPushButton("Browse")
         browse_btn.setFixedSize(70, 32)
         browse_btn.clicked.connect(self.browse_profile_output)
         self.style_btn_secondary(browse_btn)
+        options_row.addWidget(browse_btn)
         
-        output_row.addWidget(self.profile_output)
-        output_row.addWidget(browse_btn)
-        options_grid.addLayout(output_row, 2, 1, 1, 5)
+        options_row.addSpacing(20)
         
-        options_frame.layout().addLayout(options_grid)
+        # Settings button that opens the ProfileDownloadDialog
+        settings_btn = QPushButton("Settings")
+        settings_btn.setFixedHeight(32)
+        settings_btn.setMinimumWidth(100)
+        settings_btn.clicked.connect(self.show_profile_download_settings)
+        settings_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #6366f1, stop:1 #4f46e5);
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-size: 12px;
+                font-weight: bold;
+                padding: 8px 16px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #818cf8, stop:1 #6366f1);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4f46e5, stop:1 #4338ca);
+            }
+        """)
+        options_row.addWidget(settings_btn)
+        
+        options_layout.addLayout(options_row)
+        options_frame.layout().addLayout(options_layout)
         layout.addWidget(options_frame)
         
         # === INFO & PROGRESS (side by side) ===
@@ -7564,6 +8164,127 @@ class MainWindow(QMainWindow):
         videos = settings['videos']
         max_videos = settings['max_videos']
         
+        # Apply comprehensive filtering
+        original_count = len(videos)
+        filtered_videos = []
+        filter_stats = {
+            'views_low': 0, 'views_high': 0,
+            'likes_low': 0, 'likes_high': 0,
+            'comments_low': 0, 'comments_high': 0,
+            'shares_low': 0, 'shares_high': 0,
+            'duration_short': 0, 'duration_long': 0,
+            'not_verified': 0, 'not_trending': 0
+        }
+        
+        self.log(f"[Filter] Starting comprehensive filtering - Original videos: {original_count}")
+        
+        for video in videos:
+            # Extract video metrics (with fallbacks for different platforms)
+            view_count = video.get('view_count', 0)
+            like_count = video.get('like_count', video.get('likes', 0))
+            comment_count = video.get('comment_count', video.get('comments', 0))
+            share_count = video.get('share_count', video.get('shares', video.get('repost_count', 0)))
+            duration = video.get('duration', 0)
+            is_verified = video.get('uploader_verified', video.get('verified', False))
+            is_trending = video.get('trending', video.get('is_trending', False))
+            
+            # Apply engagement filters
+            if settings.get('min_views') is not None and view_count < settings['min_views']:
+                filter_stats['views_low'] += 1
+                continue
+            if settings.get('max_views') is not None and view_count > settings['max_views']:
+                filter_stats['views_high'] += 1
+                continue
+            
+            if settings.get('min_likes') is not None and like_count < settings['min_likes']:
+                filter_stats['likes_low'] += 1
+                continue
+            if settings.get('max_likes') is not None and like_count > settings['max_likes']:
+                filter_stats['likes_high'] += 1
+                continue
+            
+            if settings.get('min_comments') is not None and comment_count < settings['min_comments']:
+                filter_stats['comments_low'] += 1
+                continue
+            if settings.get('max_comments') is not None and comment_count > settings['max_comments']:
+                filter_stats['comments_high'] += 1
+                continue
+            
+            if settings.get('min_shares') is not None and share_count < settings['min_shares']:
+                filter_stats['shares_low'] += 1
+                continue
+            if settings.get('max_shares') is not None and share_count > settings['max_shares']:
+                filter_stats['shares_high'] += 1
+                continue
+            
+            # Apply content filters
+            if settings.get('min_duration') is not None and duration < settings['min_duration']:
+                filter_stats['duration_short'] += 1
+                continue
+            if settings.get('max_duration') is not None and duration > settings['max_duration']:
+                filter_stats['duration_long'] += 1
+                continue
+            
+            # Apply advanced filters
+            if settings.get('filter_verified') and not is_verified:
+                filter_stats['not_verified'] += 1
+                continue
+            
+            if settings.get('filter_trending') and not is_trending:
+                filter_stats['not_trending'] += 1
+                continue
+            
+            # Apply duration-based exclusions
+            if settings.get('exclude_shorts') and duration > 0 and duration < 60:
+                filter_stats['duration_short'] += 1
+                continue
+            
+            if settings.get('exclude_long') and duration > 600:  # 10 minutes
+                filter_stats['duration_long'] += 1
+                continue
+            
+            # Video passed all filters
+            filtered_videos.append(video)
+        
+        videos = filtered_videos
+        
+        # Log comprehensive filtering results
+        total_filtered = sum(filter_stats.values())
+        if total_filtered > 0:
+            self.log(f"[Filter] Applied comprehensive filters:")
+            
+            # Log engagement filters
+            if filter_stats['views_low'] + filter_stats['views_high'] > 0:
+                self.log(f"  Views: -{filter_stats['views_low']} low, -{filter_stats['views_high']} high")
+            if filter_stats['likes_low'] + filter_stats['likes_high'] > 0:
+                self.log(f"  Likes: -{filter_stats['likes_low']} low, -{filter_stats['likes_high']} high")
+            if filter_stats['comments_low'] + filter_stats['comments_high'] > 0:
+                self.log(f"  Comments: -{filter_stats['comments_low']} low, -{filter_stats['comments_high']} high")
+            if filter_stats['shares_low'] + filter_stats['shares_high'] > 0:
+                self.log(f"  Shares: -{filter_stats['shares_low']} low, -{filter_stats['shares_high']} high")
+            
+            # Log content filters
+            if filter_stats['duration_short'] + filter_stats['duration_long'] > 0:
+                self.log(f"  Duration: -{filter_stats['duration_short']} short, -{filter_stats['duration_long']} long")
+            
+            # Log advanced filters
+            if filter_stats['not_verified'] > 0:
+                self.log(f"  Verification: -{filter_stats['not_verified']} unverified")
+            if filter_stats['not_trending'] > 0:
+                self.log(f"  Trending: -{filter_stats['not_trending']} non-trending")
+            
+            self.log(f"[Filter] Result: {original_count} videos -> {len(videos)} match all criteria")
+            
+            if not videos:
+                QMessageBox.warning(self, "No Videos Match Filters", 
+                                  f"No videos found matching the filter criteria.\n\n"
+                                  f"Original videos: {original_count}\n"
+                                  f"Total filtered out: {total_filtered}\n"
+                                  f"Remaining videos: 0")
+                return
+        else:
+            self.log("[Filter] No filters applied, proceeding with all videos")
+        
         # Pass more videos than requested to account for failures
         # The downloader will stop when it reaches the target successful downloads
         if max_videos:
@@ -7582,8 +8303,19 @@ class MainWindow(QMainWindow):
         self.log(f"[!] Starting download of up to {max_videos if max_videos else len(video_urls)} videos from profile: {profile_data.get('profile_name', 'Unknown')}")
         self.log(f"   (Prepared {len(video_urls)} URLs to handle potential failures)")
         
-        # Use the existing multiple download functionality with target count
-        self.start_multiple_download_with_urls(video_urls, target_success=max_videos)
+        # Create download settings from the settings parameter
+        download_settings = {
+            'quality': settings.get('quality', 'best'),
+            'audio': settings.get('audio', False),
+            'subtitle': settings.get('subtitle', False),
+            'format': settings.get('format', 'Force H.264 (Compatible)'),
+            'convert': False,
+            'use_caption': True,
+            'mute': settings.get('mute', False)
+        }
+        
+        # Use the existing multiple download functionality with target count and custom settings
+        self.start_multiple_download_with_urls(video_urls, target_success=max_videos, custom_settings=download_settings)
     
     def get_profile_info_from_tab(self):
         """Get profile info from the profile tab"""
@@ -8049,12 +8781,129 @@ class MainWindow(QMainWindow):
             profile_name = data.get('profile_name', 'Unknown')
             videos = data.get('videos', [])
             
-            # Get max videos setting
+            # Get all filter settings
             settings = self.get_profile_download_settings()
             max_videos = settings.get('max_videos', 50)
             
-            # Limit videos per profile
+            # Apply comprehensive filtering
+            original_count = len(videos)
+            filtered_videos = []
+            filter_stats = {
+                'views_low': 0, 'views_high': 0,
+                'likes_low': 0, 'likes_high': 0,
+                'comments_low': 0, 'comments_high': 0,
+                'shares_low': 0, 'shares_high': 0,
+                'duration_short': 0, 'duration_long': 0,
+                'not_verified': 0, 'not_trending': 0
+            }
+            
+            for video in videos:
+                # Extract video metrics (with fallbacks for different platforms)
+                view_count = video.get('view_count', 0)
+                like_count = video.get('like_count', video.get('likes', 0))
+                comment_count = video.get('comment_count', video.get('comments', 0))
+                share_count = video.get('share_count', video.get('shares', video.get('repost_count', 0)))
+                duration = video.get('duration', 0)
+                is_verified = video.get('uploader_verified', video.get('verified', False))
+                is_trending = video.get('trending', video.get('is_trending', False))
+                
+                # Apply engagement filters
+                if settings.get('min_views') is not None and view_count < settings['min_views']:
+                    filter_stats['views_low'] += 1
+                    continue
+                if settings.get('max_views') is not None and view_count > settings['max_views']:
+                    filter_stats['views_high'] += 1
+                    continue
+                
+                if settings.get('min_likes') is not None and like_count < settings['min_likes']:
+                    filter_stats['likes_low'] += 1
+                    continue
+                if settings.get('max_likes') is not None and like_count > settings['max_likes']:
+                    filter_stats['likes_high'] += 1
+                    continue
+                
+                if settings.get('min_comments') is not None and comment_count < settings['min_comments']:
+                    filter_stats['comments_low'] += 1
+                    continue
+                if settings.get('max_comments') is not None and comment_count > settings['max_comments']:
+                    filter_stats['comments_high'] += 1
+                    continue
+                
+                if settings.get('min_shares') is not None and share_count < settings['min_shares']:
+                    filter_stats['shares_low'] += 1
+                    continue
+                if settings.get('max_shares') is not None and share_count > settings['max_shares']:
+                    filter_stats['shares_high'] += 1
+                    continue
+                
+                # Apply content filters
+                if settings.get('min_duration') is not None and duration < settings['min_duration']:
+                    filter_stats['duration_short'] += 1
+                    continue
+                if settings.get('max_duration') is not None and duration > settings['max_duration']:
+                    filter_stats['duration_long'] += 1
+                    continue
+                
+                # Apply advanced filters
+                if settings.get('filter_verified') and not is_verified:
+                    filter_stats['not_verified'] += 1
+                    continue
+                
+                if settings.get('filter_trending') and not is_trending:
+                    filter_stats['not_trending'] += 1
+                    continue
+                
+                # Apply duration-based exclusions
+                if settings.get('exclude_shorts') and duration > 0 and duration < 60:
+                    filter_stats['duration_short'] += 1
+                    continue
+                
+                if settings.get('exclude_long') and duration > 600:  # 10 minutes
+                    filter_stats['duration_long'] += 1
+                    continue
+                
+                # Video passed all filters
+                filtered_videos.append(video)
+            
+            videos = filtered_videos
+            
+            # Log comprehensive filtering results
+            total_filtered = sum(filter_stats.values())
+            if total_filtered > 0:
+                self.profile_videos_text.append(f"   [Filter] Applied filters to {profile_name}:")
+                
+                # Log engagement filters
+                if filter_stats['views_low'] + filter_stats['views_high'] > 0:
+                    self.profile_videos_text.append(f"     Views: -{filter_stats['views_low']} low, -{filter_stats['views_high']} high")
+                if filter_stats['likes_low'] + filter_stats['likes_high'] > 0:
+                    self.profile_videos_text.append(f"     Likes: -{filter_stats['likes_low']} low, -{filter_stats['likes_high']} high")
+                if filter_stats['comments_low'] + filter_stats['comments_high'] > 0:
+                    self.profile_videos_text.append(f"     Comments: -{filter_stats['comments_low']} low, -{filter_stats['comments_high']} high")
+                if filter_stats['shares_low'] + filter_stats['shares_high'] > 0:
+                    self.profile_videos_text.append(f"     Shares: -{filter_stats['shares_low']} low, -{filter_stats['shares_high']} high")
+                
+                # Log content filters
+                if filter_stats['duration_short'] + filter_stats['duration_long'] > 0:
+                    self.profile_videos_text.append(f"     Duration: -{filter_stats['duration_short']} short, -{filter_stats['duration_long']} long")
+                
+                # Log advanced filters
+                if filter_stats['not_verified'] > 0:
+                    self.profile_videos_text.append(f"     Verification: -{filter_stats['not_verified']} unverified")
+                if filter_stats['not_trending'] > 0:
+                    self.profile_videos_text.append(f"     Trending: -{filter_stats['not_trending']} non-trending")
+                
+                self.profile_videos_text.append(f"   [Filter] {profile_name}: {original_count} videos -> {len(videos)} match all criteria")
+                
+                if not videos:
+                    self.profile_videos_text.append(f"   [X] {profile_name}: No videos match filter criteria")
+                    # Process next profile even if this one has no matching videos
+                    self.current_profile_index += 1
+                    self.process_next_profile()
+                    return
+            
+            # Limit videos per profile (after filtering)
             if max_videos and len(videos) > max_videos:
+                videos = videos[:max_videos]
                 videos = videos[:max_videos]
             
             # Extract URLs
@@ -8125,6 +8974,60 @@ class MainWindow(QMainWindow):
         """Start downloading videos from profile with custom settings"""
         videos = profile_data.get('videos', [])
         max_videos = settings['max_videos']
+        min_views = settings.get('min_views')
+        max_views = settings.get('max_views')
+        
+        # Filter videos by view count if specified
+        original_count = len(videos)
+        self.profile_videos_text.append(f"[DEBUG] Starting view count filtering - Original videos: {original_count}")
+        self.profile_videos_text.append(f"[DEBUG] Min views setting: {min_views}, Max views setting: {max_views}")
+        
+        if min_views is not None or max_views is not None:
+            filtered_videos = []
+            skipped_low = 0
+            skipped_high = 0
+            
+            # Debug: Show first 5 videos' view counts
+            self.profile_videos_text.append("[DEBUG] Sample video view counts:")
+            for i, video in enumerate(videos[:5]):
+                view_count = video.get('view_count', 0)
+                title = video.get('title', 'Unknown')[:30]
+                self.profile_videos_text.append(f"  Video {i+1}: '{title}...' - {view_count:,} views")
+            
+            for video in videos:
+                view_count = video.get('view_count', 0)
+                
+                # Skip if below minimum views
+                if min_views is not None and view_count < min_views:
+                    skipped_low += 1
+                    continue
+                
+                # Skip if above maximum views
+                if max_views is not None and view_count > max_views:
+                    skipped_high += 1
+                    continue
+                
+                filtered_videos.append(video)
+            
+            videos = filtered_videos
+            filtered_count = len(videos)
+            
+            # Log filtering results
+            if min_views is not None and max_views is not None:
+                self.profile_videos_text.append(f"[Filter] View count filter: {min_views:,} - {max_views:,} views")
+            elif min_views is not None:
+                self.profile_videos_text.append(f"[Filter] View count filter: minimum {min_views:,} views")
+            elif max_views is not None:
+                self.profile_videos_text.append(f"[Filter] View count filter: maximum {max_views:,} views")
+            
+            self.profile_videos_text.append(f"[Filter] Skipped {skipped_low} videos (too few views), {skipped_high} videos (too many views)")
+            self.profile_videos_text.append(f"[Filter] Filtered {original_count} videos -> {filtered_count} videos match criteria")
+            
+            if not videos:
+                self.profile_videos_text.append("[X] No videos found matching the view count criteria")
+                return
+        else:
+            self.profile_videos_text.append("[DEBUG] No view count filters set, proceeding with all videos")
         
         # Apply 3x buffer to account for Facebook's high failure rate
         # The downloader will stop when it reaches the target successful downloads
@@ -8321,27 +9224,32 @@ class MainWindow(QMainWindow):
             self.profile_videos_text.append(f"[X] Failed to get profile info:")
             self.profile_videos_text.append(f"Error: {error_msg}")
     
-    def start_multiple_download_with_urls(self, urls, target_success=None):
+    def start_multiple_download_with_urls(self, urls, target_success=None, custom_settings=None):
         """Start multiple downloads with a provided list of URLs
         
         Args:
             urls: List of URLs to download
             target_success: Optional target number of successful downloads. 
                            If set, will stop after reaching this many successes.
+            custom_settings: Optional custom settings dict to use instead of UI settings
         """
         if not urls:
             return
         
-        # Set up download settings (use current settings from UI)
-        settings = {
-            'quality': self.multi_quality.currentText(),
-            'audio': self.multi_audio_cb.isChecked(),
-            'subtitle': self.multi_subtitle_cb.isChecked(),
-            'format': self.multi_format.currentText(),
-            'convert': False,
-            'use_caption': True,
-            'target_success': target_success  # Pass target to worker
-        }
+        # Set up download settings (use custom settings if provided, otherwise use current UI settings)
+        if custom_settings:
+            settings = custom_settings.copy()
+            settings['target_success'] = target_success  # Add target to custom settings
+        else:
+            settings = {
+                'quality': self.multi_quality.currentText(),
+                'audio': self.multi_audio_cb.isChecked(),
+                'subtitle': self.multi_subtitle_cb.isChecked(),
+                'format': self.multi_format.currentText(),
+                'convert': False,
+                'use_caption': True,
+                'target_success': target_success  # Pass target to worker
+            }
         
         # Set output directory
         self.dl.output_dir = Path(self.multi_output.text() or "downloads")
@@ -8379,6 +9287,29 @@ class MainWindow(QMainWindow):
         folder = QFileDialog.getExistingDirectory(self, "Select Profile Download Directory")
         if folder:
             self.profile_output.setText(folder)
+    
+    def show_profile_download_settings(self):
+        """Show profile download settings using the existing ProfileDownloadDialog"""
+        # Create a mock profile info for the settings dialog
+        mock_profile_info = {
+            'profile_name': 'Download Settings',
+            'platform': 'Configuration',
+            'total_found': 0,
+            'videos': []
+        }
+        
+        # Create and show the settings dialog
+        settings_dialog = ProfileDownloadDialog(self, mock_profile_info)
+        settings_dialog.setWindowTitle("Profile Download Settings")
+        
+        if settings_dialog.exec() == QDialog.DialogCode.Accepted:
+            settings = settings_dialog.get_download_settings()
+            # Store settings for later use when downloading
+            self._profile_download_settings = settings
+            
+            # Show confirmation
+            max_videos_text = "All available" if settings.get('max_videos') is None else str(settings.get('max_videos'))
+            self.log(f"[S] Profile settings configured: {max_videos_text} videos, {settings.get('sort_order', 'newest first')}")
     
     # === VIDEO EDIT METHODS ===
     
@@ -8513,7 +9444,7 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(25, 25, 25, 25)
         
         # Header with icon
-        header = QLabel("⚠️ FFmpeg Required")
+        header = QLabel("[!] FFmpeg Required")
         header.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
         header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(header)
@@ -8535,7 +9466,7 @@ class MainWindow(QMainWindow):
             "Step 3: Extract the zip file to C:\\ffmpeg\n\n"
             "Step 4: Add FFmpeg to Windows PATH:\n"
             "   • Press Win+R, type 'sysdm.cpl' and press Enter\n"
-            "   • Click 'Advanced' tab → 'Environment Variables'\n"
+            "   • Click 'Advanced' tab -> 'Environment Variables'\n"
             "   • Under 'System variables', find 'Path' and click 'Edit'\n"
             "   • Click 'New' and add: C:\\ffmpeg\\bin\n"
             "   • Click OK on all windows\n\n"
@@ -9560,28 +10491,278 @@ class MainWindow(QMainWindow):
         """)
     
     def get_profile_download_settings(self):
-        """Get profile download settings from the UI"""
-        max_videos_text = self.profile_max_videos.currentText()
-        max_videos = None if max_videos_text == "All available" else int(max_videos_text)
+        """Get profile download settings from stored dialog settings or QSettings"""
+        # Use stored settings from dialog if available, otherwise load from QSettings
+        if hasattr(self, '_profile_download_settings') and self._profile_download_settings:
+            stored_settings = self._profile_download_settings
+            max_videos = stored_settings.get('max_videos', 50)
+            sort_order = stored_settings.get('sort_order', 'Newest first')
+            quality = stored_settings.get('quality', 'best')
+            format_setting = stored_settings.get('format', 'mp4 (H.264)')
+            
+            # Engagement filters
+            min_views = stored_settings.get('min_views')
+            max_views = stored_settings.get('max_views')
+            min_likes = stored_settings.get('min_likes')
+            max_likes = stored_settings.get('max_likes')
+            min_comments = stored_settings.get('min_comments')
+            max_comments = stored_settings.get('max_comments')
+            min_shares = stored_settings.get('min_shares')
+            max_shares = stored_settings.get('max_shares')
+            
+            # Content filters
+            min_duration = stored_settings.get('min_duration')
+            max_duration = stored_settings.get('max_duration')
+            filter_verified = stored_settings.get('filter_verified', False)
+            filter_trending = stored_settings.get('filter_trending', False)
+            exclude_shorts = stored_settings.get('exclude_shorts', False)
+            exclude_long = stored_settings.get('exclude_long', False)
+            
+            # Download options
+            audio_only = stored_settings.get('audio_only', False)
+            subtitles = stored_settings.get('subtitles', False)
+            mute_video = stored_settings.get('mute_video', False)
+            create_subfolder = stored_settings.get('create_subfolder', True)
+        else:
+            # Load from QSettings if no dialog settings stored
+            settings = QSettings("VideoDownloader", "ProfileDownloadSettings")
+            
+            # Load dropdown selections
+            max_videos_text = settings.value("max_videos", "50")
+            sort_order = settings.value("sort_order", "Newest first")
+            quality = settings.value("quality", "best")
+            format_setting = settings.value("format", "mp4 (H.264)")
+            
+            # Parse max_videos from text
+            if max_videos_text.lower().startswith('all'):
+                max_videos = None  # All videos
+            else:
+                try:
+                    max_videos = int(max_videos_text)
+                except:
+                    max_videos = 50
+            
+            # Load engagement filter inputs
+            min_views_text = settings.value("min_views", "")
+            max_views_text = settings.value("max_views", "")
+            min_likes_text = settings.value("min_likes", "")
+            max_likes_text = settings.value("max_likes", "")
+            min_comments_text = settings.value("min_comments", "")
+            max_comments_text = settings.value("max_comments", "")
+            min_shares_text = settings.value("min_shares", "")
+            max_shares_text = settings.value("max_shares", "")
+            
+            # Parse engagement filters
+            min_views = self._parse_number_input(min_views_text) if min_views_text else None
+            max_views = self._parse_number_input(max_views_text) if max_views_text else None
+            min_likes = self._parse_number_input(min_likes_text) if min_likes_text else None
+            max_likes = self._parse_number_input(max_likes_text) if max_likes_text else None
+            min_comments = self._parse_number_input(min_comments_text) if min_comments_text else None
+            max_comments = self._parse_number_input(max_comments_text) if max_comments_text else None
+            min_shares = self._parse_number_input(min_shares_text) if min_shares_text else None
+            max_shares = self._parse_number_input(max_shares_text) if max_shares_text else None
+            
+            # Load content filter inputs
+            min_duration_text = settings.value("min_duration", "")
+            max_duration_text = settings.value("max_duration", "")
+            min_duration = int(min_duration_text) if min_duration_text.isdigit() else None
+            max_duration = int(max_duration_text) if max_duration_text.isdigit() else None
+            
+            # Load checkboxes
+            audio_only = settings.value("audio_only", False, type=bool)
+            subtitles = settings.value("subtitles", False, type=bool)
+            mute_video = settings.value("mute_video", False, type=bool)
+            create_subfolder = settings.value("create_subfolder", True, type=bool)
+            
+            # Load advanced filter checkboxes
+            filter_verified = settings.value("filter_verified", False, type=bool)
+            filter_trending = settings.value("filter_trending", False, type=bool)
+            exclude_shorts = settings.value("exclude_shorts", False, type=bool)
+            exclude_long = settings.value("exclude_long", False, type=bool)
         
-        # Determine output directory
+        # Determine output directory (always from the UI input)
         output_dir = self.profile_output.text().strip() or "downloads/profiles"
         
+        # Convert sort order to internal format
+        sort_internal = sort_order.lower().replace(' first', '')  # 'newest' or 'oldest'
+        
         return {
-            'quality': self.profile_quality.currentText(),
-            'audio': self.profile_audio_cb.isChecked(),
-            'subtitle': self.profile_subtitle_cb.isChecked(),
-            'format': self.profile_format.currentText(),
+            'quality': quality,
+            'audio': audio_only,
+            'subtitle': subtitles,
+            'format': format_setting,
             'convert': False,
-            'mute': self.profile_mute_cb.isChecked(),
+            'mute': mute_video,
             'max_videos': max_videos,
-            'sort_order': 'newest',
+            'sort_order': sort_internal,
             'output_dir': output_dir,
-            'create_subfolder': self.profile_create_subfolder_cb.isChecked(),
+            'create_subfolder': create_subfolder,
             'add_date': False,
             'add_index': False,
-            'skip_existing': True
+            'skip_existing': True,
+            
+            # Engagement filters
+            'min_views': min_views,
+            'max_views': max_views,
+            'min_likes': min_likes,
+            'max_likes': max_likes,
+            'min_comments': min_comments,
+            'max_comments': max_comments,
+            'min_shares': min_shares,
+            'max_shares': max_shares,
+            
+            # Content filters
+            'min_duration': min_duration,
+            'max_duration': max_duration,
+            'filter_verified': filter_verified,
+            'filter_trending': filter_trending,
+            'exclude_shorts': exclude_shorts,
+            'exclude_long': exclude_long
         }
+    
+    def _parse_number_input(self, text):
+        """Parse number input with K/M/B suffixes"""
+        if not text or not text.strip():
+            return None
+        
+        text = text.strip().upper()
+        
+        try:
+            # Handle suffixes
+            if text.endswith('K'):
+                return int(float(text[:-1]) * 1000)
+            elif text.endswith('M'):
+                return int(float(text[:-1]) * 1000000)
+            elif text.endswith('B'):
+                return int(float(text[:-1]) * 1000000000)
+            else:
+                return int(text)
+        except:
+            return None
+    
+    def _clean_tiktok_caption_for_filename(self, caption):
+        """Clean TikTok caption text for use as filename"""
+        if not caption:
+            return None
+        
+        # Remove common TikTok mentions that clutter filenames
+        import re
+        
+        # Remove mentions but keep hashtags
+        caption = re.sub(r'@\w+', '', caption)
+        
+        # Remove URLs
+        caption = re.sub(r'http[s]?://\S+', '', caption)
+        
+        # Remove extra whitespace and newlines
+        caption = re.sub(r'\s+', ' ', caption).strip()
+        
+        # Keep only alphanumeric, spaces, hyphens, hashtags
+        safe_caption = "".join(c for c in caption if c.isalnum() or c in (' ', '-', '#', '.')).strip()
+        
+        # Remove multiple consecutive spaces
+        safe_caption = re.sub(r' +', ' ', safe_caption)
+        
+        # Limit length to 80 characters
+        if len(safe_caption) > 80:
+            safe_caption = safe_caption[:80].rstrip(' ')
+        
+        # Ensure it's not empty and doesn't start/end with space
+        safe_caption = safe_caption.strip()
+        
+        return safe_caption if safe_caption else None
+    
+    def _load_profile_download_settings(self):
+        """Load profile download settings from QSettings on startup"""
+        try:
+            settings = QSettings("VideoDownloader", "ProfileDownloadSettings")
+            
+            # Check if any profile settings exist
+            if settings.value("max_videos"):
+                # Load settings and store them in _profile_download_settings
+                max_videos_text = settings.value("max_videos", "50")
+                sort_order = settings.value("sort_order", "Newest first")
+                quality = settings.value("quality", "best")
+                format_setting = settings.value("format", "mp4 (H.264)")
+                
+                # Parse max_videos from text
+                if max_videos_text.lower().startswith('all'):
+                    max_videos = None  # All videos
+                else:
+                    try:
+                        max_videos = int(max_videos_text)
+                    except:
+                        max_videos = 50
+                
+                # Load engagement filter inputs
+                min_views_text = settings.value("min_views", "")
+                max_views_text = settings.value("max_views", "")
+                min_likes_text = settings.value("min_likes", "")
+                max_likes_text = settings.value("max_likes", "")
+                min_comments_text = settings.value("min_comments", "")
+                max_comments_text = settings.value("max_comments", "")
+                min_shares_text = settings.value("min_shares", "")
+                max_shares_text = settings.value("max_shares", "")
+                
+                # Parse engagement filters
+                min_views = self._parse_number_input(min_views_text) if min_views_text else None
+                max_views = self._parse_number_input(max_views_text) if max_views_text else None
+                min_likes = self._parse_number_input(min_likes_text) if min_likes_text else None
+                max_likes = self._parse_number_input(max_likes_text) if max_likes_text else None
+                min_comments = self._parse_number_input(min_comments_text) if min_comments_text else None
+                max_comments = self._parse_number_input(max_comments_text) if max_comments_text else None
+                min_shares = self._parse_number_input(min_shares_text) if min_shares_text else None
+                max_shares = self._parse_number_input(max_shares_text) if max_shares_text else None
+                
+                # Load content filter inputs
+                min_duration_text = settings.value("min_duration", "")
+                max_duration_text = settings.value("max_duration", "")
+                min_duration = int(min_duration_text) if min_duration_text.isdigit() else None
+                max_duration = int(max_duration_text) if max_duration_text.isdigit() else None
+                
+                # Load checkboxes
+                audio_only = settings.value("audio_only", False, type=bool)
+                subtitles = settings.value("subtitles", False, type=bool)
+                mute_video = settings.value("mute_video", False, type=bool)
+                create_subfolder = settings.value("create_subfolder", True, type=bool)
+                
+                # Load advanced filter checkboxes
+                filter_verified = settings.value("filter_verified", False, type=bool)
+                filter_trending = settings.value("filter_trending", False, type=bool)
+                exclude_shorts = settings.value("exclude_shorts", False, type=bool)
+                exclude_long = settings.value("exclude_long", False, type=bool)
+                
+                # Store in _profile_download_settings for immediate use
+                self._profile_download_settings = {
+                    'max_videos': max_videos,
+                    'sort_order': sort_order,
+                    'quality': quality,
+                    'format': format_setting,
+                    'audio': audio_only,
+                    'subtitle': subtitles,
+                    'mute': mute_video,
+                    'create_subfolder': create_subfolder,
+                    'min_views': min_views,
+                    'max_views': max_views,
+                    'min_likes': min_likes,
+                    'max_likes': max_likes,
+                    'min_comments': min_comments,
+                    'max_comments': max_comments,
+                    'min_shares': min_shares,
+                    'max_shares': max_shares,
+                    'min_duration': min_duration,
+                    'max_duration': max_duration,
+                    'filter_verified': filter_verified,
+                    'filter_trending': filter_trending,
+                    'exclude_shorts': exclude_shorts,
+                    'exclude_long': exclude_long
+                }
+                
+                self.log(f"[S] Loaded profile settings: {max_videos_text} videos, {sort_order}")
+                
+        except Exception as e:
+            self.log(f"[!] Failed to load profile settings: {str(e)}")
+    
     
     def download(self):
         url = self.url_input.text().strip()
@@ -9854,6 +11035,9 @@ class MainWindow(QMainWindow):
             
             # Force sync settings to ensure they're properly loaded
             self.settings.sync()
+            
+            # Load profile download settings
+            self._load_profile_download_settings()
             
             # Log content - NOT persisted (starts fresh each session)
             # Explicitly remove any old log_content that might exist
@@ -10276,6 +11460,18 @@ class MainWindow(QMainWindow):
 
 
 def main():
+    # Configure console encoding for better Unicode support
+    import sys
+    import os
+    
+    # Set UTF-8 encoding for console output on Windows
+    if os.name == 'nt':  # Windows
+        try:
+            # Try to set console to UTF-8
+            os.system('chcp 65001 >nul 2>&1')
+        except:
+            pass
+    
     app = QApplication(sys.argv)
     app.setApplicationName("VIDT - Video Downloader Tool")
     
