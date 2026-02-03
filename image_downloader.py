@@ -73,6 +73,25 @@ class ImageDownloader:
         self.driver = None
         self.downloaded_hashes = set()  # Track downloaded images to avoid duplicates
         
+        # Load existing files to avoid re-downloading
+        self._load_existing_files()
+        
+    def _load_existing_files(self):
+        """Load hashes of existing files to avoid re-downloading duplicates"""
+        try:
+            # Scan output directory and subdirectories for existing images
+            for file_path in self.output_dir.rglob('*'):
+                if file_path.is_file() and file_path.suffix.lower() in self.IMAGE_EXTENSIONS:
+                    try:
+                        with open(file_path, 'rb') as f:
+                            content = f.read()
+                            file_hash = self._get_file_hash(content)
+                            self.downloaded_hashes.add(file_hash)
+                    except:
+                        continue  # Skip files we can't read
+        except:
+            pass  # If directory scanning fails, continue without pre-loading
+        
     def _create_session(self) -> requests.Session:
         """Create a requests session with proper headers"""
         session = requests.Session()
@@ -98,11 +117,34 @@ class ImageDownloader:
                 options.add_argument('--disable-gpu')
                 options.add_argument('--no-sandbox')
                 options.add_argument('--disable-dev-shm-usage')
+                options.add_argument('--disable-extensions')
+                options.add_argument('--disable-plugins')
+                options.add_argument('--disable-images')
+                options.add_argument('--disable-web-security')
+                options.add_argument('--disable-features=VizDisplayCompositor')
+                options.add_argument('--disable-logging')
+                options.add_argument('--log-level=3')
+                options.add_argument('--silent')
+                options.add_argument('--disable-background-timer-throttling')
+                options.add_argument('--disable-backgrounding-occluded-windows')
+                options.add_argument('--disable-renderer-backgrounding')
                 options.add_argument(f'--user-agent={self.USER_AGENTS["desktop"]}')
                 options.add_argument('--window-size=1920,1080')
+                options.add_argument('--page-load-strategy=eager')
                 
+                # Suppress DevTools and GPU messages
+                options.add_experimental_option('excludeSwitches', ['enable-logging'])
+                options.add_experimental_option('useAutomationExtension', False)
+                options.add_experimental_option('excludeSwitches', ['enable-automation'])
+                
+                # Create service
                 service = Service(ChromeDriverManager().install())
+                
+                # Create driver directly - no complex timeout handling
                 self.driver = webdriver.Chrome(service=service, options=options)
+                self.driver.set_page_load_timeout(10)
+                self.driver.implicitly_wait(3)
+                
             except Exception as e:
                 print(f"Failed to create Selenium driver: {e}")
                 return None
@@ -225,7 +267,7 @@ class ImageDownloader:
     
     def _download_direct(self, url: str, output_path: Path, 
                          filename: str = None, callback: Callable = None) -> Dict:
-        """Download image from direct URL"""
+        """Download image from direct URL with duplicate detection"""
         try:
             # Make request with streaming
             response = self.session.get(url, stream=True, timeout=30)
@@ -233,6 +275,16 @@ class ImageDownloader:
             
             # Get content type and determine extension
             content_type = response.headers.get('Content-Type', 'image/jpeg')
+            
+            # Download content first to check for duplicates
+            content = response.content
+            
+            # Check for duplicates by hash
+            file_hash = self._get_file_hash(content)
+            if file_hash in self.downloaded_hashes:
+                if callback:
+                    callback(f"⏭ Skipped duplicate (same content)")
+                return {'success': True, 'file_path': '', 'skipped': True, 'reason': 'duplicate_hash'}
             
             # Determine filename
             if not filename:
@@ -242,9 +294,9 @@ class ImageDownloader:
                 if url_filename and '.' in url_filename:
                     filename = url_filename
                 else:
-                    # Generate from hash
+                    # Generate from hash (this ensures unique names for same content)
                     ext = self._get_extension_from_content_type(content_type)
-                    filename = f"image_{int(time.time())}_{hash(url) % 10000}{ext}"
+                    filename = f"image_{file_hash[:12]}{ext}"
             
             filename = self._sanitize_filename(filename)
             
@@ -255,17 +307,21 @@ class ImageDownloader:
             
             file_path = output_path / filename
             
-            # Download content
-            content = response.content
+            # Check if file already exists with same content
+            if file_path.exists():
+                try:
+                    with open(file_path, 'rb') as existing_file:
+                        existing_content = existing_file.read()
+                        existing_hash = self._get_file_hash(existing_content)
+                        if existing_hash == file_hash:
+                            if callback:
+                                callback(f"⏭ Skipped duplicate (file exists): {filename}")
+                            self.downloaded_hashes.add(file_hash)
+                            return {'success': True, 'file_path': str(file_path), 'skipped': True, 'reason': 'duplicate_file'}
+                except:
+                    pass  # If we can't read the existing file, continue with download
             
-            # Check for duplicates
-            file_hash = self._get_file_hash(content)
-            if file_hash in self.downloaded_hashes:
-                if callback:
-                    callback(f"⏭ Skipped duplicate: {filename}")
-                return {'success': True, 'file_path': str(file_path), 'skipped': True, 'reason': 'duplicate'}
-            
-            # Handle filename conflicts
+            # Handle filename conflicts (different content, same name)
             counter = 1
             original_path = file_path
             while file_path.exists():
@@ -278,6 +334,7 @@ class ImageDownloader:
             with open(file_path, 'wb') as f:
                 f.write(content)
             
+            # Add to downloaded hashes to prevent future duplicates
             self.downloaded_hashes.add(file_hash)
             
             # Get file size
@@ -392,18 +449,18 @@ class ImageDownloader:
     def _download_pinterest(self, url: str, output_path: Path,
                             filename: str = None, callback: Callable = None,
                             pinterest_max: int = 50) -> Dict:
-        """Download image from Pinterest"""
+        """Download image from Pinterest - supports both pins and search URLs"""
         try:
-            # Check if this is a Pinterest search URL - needs Selenium for dynamic content
+            # Check if this is a Pinterest search URL - handle these specially
             if '/search/' in url or 'q=' in url:
                 if callback:
-                    callback("🔍 Detected Pinterest search URL - using browser to load results...")
+                    callback("🔍 Pinterest search URL detected - extracting images...")
                 return self._download_pinterest_search(url, output_path, callback, pinterest_max)
             
             if callback:
                 callback("🔍 Extracting Pinterest image...")
             
-            # Pinterest requires special handling
+            # For regular Pinterest pins, use fast HTTP requests only - NO SELENIUM
             headers = {
                 'User-Agent': self.USER_AGENTS['desktop'],
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -416,87 +473,39 @@ class ImageDownloader:
             if 'pin.it' in url:
                 if callback:
                     callback("🔗 Resolving Pinterest short URL...")
-                original_url = url
                 try:
-                    # First try HEAD request (faster)
-                    redirect_response = self.session.head(url, headers=headers, allow_redirects=True, timeout=15)
+                    redirect_response = self.session.head(url, headers=headers, allow_redirects=True, timeout=10)
                     if redirect_response.url and 'pinterest' in redirect_response.url:
                         url = redirect_response.url
                         if callback:
                             callback(f"🔗 Resolved to: {url[:60]}...")
                 except Exception as e:
                     if callback:
-                        callback(f"⚠️ HEAD request failed, trying GET...")
-                    try:
-                        # Try GET if HEAD fails (some servers don't support HEAD)
-                        redirect_response = self.session.get(url, headers=headers, allow_redirects=True, timeout=20)
-                        if redirect_response.url:
-                            url = redirect_response.url
-                            if callback:
-                                callback(f"🔗 Resolved to: {url[:60]}...")
-                    except Exception as e2:
-                        if callback:
-                            callback(f"⚠️ Could not resolve short URL: {str(e2)}")
-                        # Continue with original URL and hope for the best
-                        url = original_url
+                        callback(f"⚠️ Could not resolve short URL, trying original...")
             
-            response = self.session.get(url, headers=headers, timeout=30)
+            # Get the page content
+            response = self.session.get(url, headers=headers, timeout=15)
             response.raise_for_status()
             
-            # Try to find the original image URL
+            # Try to find the original image URL using multiple methods
             image_url = None
             
-            # Method 1: Look for og:image meta tag
+            # Method 1: Look for og:image meta tag (most reliable)
             if BS4_AVAILABLE:
                 soup = BeautifulSoup(response.text, 'html.parser')
-                
-                # Try og:image first (most reliable)
                 og_image = soup.find('meta', property='og:image')
                 if og_image and og_image.get('content'):
                     image_url = og_image['content']
                     if callback:
                         callback(f"📷 Found og:image")
-                
-                # Try twitter:image
-                if not image_url:
-                    twitter_image = soup.find('meta', attrs={'name': 'twitter:image'})
-                    if twitter_image and twitter_image.get('content'):
-                        image_url = twitter_image['content']
-                
-                # Try to find higher resolution in JSON data
-                if not image_url:
-                    scripts = soup.find_all('script', type='application/json')
-                    for script in scripts:
-                        try:
-                            if script.string:
-                                data = json.loads(script.string)
-                                image_url = self._extract_pinterest_image_from_json(data)
-                                if image_url:
-                                    break
-                        except:
-                            continue
-                
-                # Try finding image in script tags with __PWS_DATA__
-                if not image_url:
-                    for script in soup.find_all('script'):
-                        if script.string and '__PWS_DATA__' in script.string:
-                            try:
-                                match = re.search(r'__PWS_DATA__\s*=\s*({.+?});', script.string, re.DOTALL)
-                                if match:
-                                    data = json.loads(match.group(1))
-                                    image_url = self._extract_pinterest_image_from_json(data)
-                            except:
-                                pass
             
-            # Method 2: Regex fallback (works without BeautifulSoup)
+            # Method 2: Regex patterns for Pinterest image URLs
             if not image_url:
                 patterns = [
                     r'"originals":\s*{\s*"url":\s*"([^"]+)"',
                     r'"orig":\s*{\s*"url":\s*"([^"]+)"',
                     r'"736x":\s*{\s*"url":\s*"([^"]+)"',
                     r'<meta[^>]+property="og:image"[^>]+content="([^"]+)"',
-                    r'<meta[^>]+content="([^"]+)"[^>]+property="og:image"',
-                    r'"image_url":\s*"([^"]+)"',
                     r'"url":\s*"(https://i\.pinimg\.com/[^"]+)"',
                 ]
                 for pattern in patterns:
@@ -510,12 +519,10 @@ class ImageDownloader:
             if not image_url:
                 if callback:
                     callback("🔍 Searching for Pinterest CDN URLs...")
-                # Look for any pinimg.com URLs
                 pinimg_patterns = [
                     r'(https://i\.pinimg\.com/originals/[a-zA-Z0-9/._-]+\.(?:jpg|jpeg|png|gif|webp))',
                     r'(https://i\.pinimg\.com/736x/[a-zA-Z0-9/._-]+\.(?:jpg|jpeg|png|gif|webp))',
                     r'(https://i\.pinimg\.com/564x/[a-zA-Z0-9/._-]+\.(?:jpg|jpeg|png|gif|webp))',
-                    r'(https://i\.pinimg\.com/474x/[a-zA-Z0-9/._-]+\.(?:jpg|jpeg|png|gif|webp))',
                 ]
                 for pattern in pinimg_patterns:
                     matches = re.findall(pattern, response.text)
@@ -528,19 +535,230 @@ class ImageDownloader:
             if not image_url:
                 return {'success': False, 'error': 'Could not find image URL on Pinterest page. The pin may be private or deleted.', 'url': url}
             
-            # Clean up URL
+            # Clean up URL and try to get highest resolution
+            original_url = image_url
             image_url = image_url.replace('\\/', '/').replace('\\u002F', '/')
-            
-            # Try to get highest resolution
-            image_url = self._get_pinterest_high_res(image_url)
+            high_res_url = self._get_pinterest_high_res(image_url)
             
             if callback:
-                callback(f"📥 Downloading: {image_url[:60]}...")
+                if high_res_url != image_url:
+                    callback(f"🔍 Upgraded to higher resolution")
+                    callback(f"   Original: {image_url[:60]}...")
+                    callback(f"   High-res: {high_res_url[:60]}...")
+                else:
+                    callback(f"📷 Using found URL: {image_url[:60]}...")
+            
+            image_url = high_res_url
+            
+            if callback:
+                callback(f"📥 Downloading image...")
             
             return self._download_direct(image_url, output_path, filename, callback)
             
         except Exception as e:
             return {'success': False, 'error': f"Pinterest download failed: {str(e)}", 'url': url}
+
+    
+    def _download_pinterest_search(self, url: str, output_path: Path,
+                                    callback: Callable = None, max_images: int = 20) -> Dict:
+        """Download images from Pinterest search results - hybrid approach with duplicate removal"""
+        try:
+            if callback:
+                callback(f"🔍 Extracting images from Pinterest search (max {max_images})...")
+            
+            # First try HTTP-only approach (fast but limited)
+            image_urls = self._get_pinterest_search_http(url, callback, min(max_images, 10))
+            
+            # If we need more images and have Selenium available, use it
+            if len(image_urls) < max_images and SELENIUM_AVAILABLE:
+                if callback:
+                    callback(f"📜 Found {len(image_urls)} images with HTTP, using browser for more...")
+                selenium_urls = self._get_pinterest_search_selenium(url, callback, max_images)
+                
+                # Combine and deduplicate URLs
+                for url_item in selenium_urls:
+                    if url_item not in image_urls and len(image_urls) < max_images:
+                        image_urls.append(url_item)
+            
+            elif len(image_urls) < max_images and not SELENIUM_AVAILABLE:
+                if callback:
+                    callback(f"⚠️ Only found {len(image_urls)} images with HTTP. Install Selenium for more: pip install selenium webdriver-manager")
+            
+            if not image_urls:
+                return {'success': False, 'error': 'No images found in Pinterest search results. Try a different search term.', 'url': url}
+            
+            # Remove duplicate URLs (same URL appearing multiple times)
+            unique_urls = []
+            seen_urls = set()
+            for img_url in image_urls:
+                if img_url not in seen_urls:
+                    seen_urls.add(img_url)
+                    unique_urls.append(img_url)
+            
+            if callback:
+                callback(f"📊 Found {len(unique_urls)} unique images (removed {len(image_urls) - len(unique_urls)} duplicate URLs)")
+            
+            # Download all found images
+            downloaded = 0
+            failed = 0
+            skipped = 0
+            
+            for i, img_url in enumerate(unique_urls[:max_images], 1):
+                if callback:
+                    callback(f"📥 Downloading image {i}/{len(unique_urls[:max_images])}...")
+                
+                result = self._download_direct(img_url, output_path, None, None)
+                if result.get('success'):
+                    if result.get('skipped'):
+                        skipped += 1
+                    else:
+                        downloaded += 1
+                else:
+                    failed += 1
+            
+            return {
+                'success': downloaded > 0,
+                'downloaded': downloaded,
+                'failed': failed,
+                'skipped': skipped,
+                'total': len(unique_urls[:max_images]),
+                'message': f'Downloaded {downloaded}/{len(unique_urls[:max_images])} images from Pinterest search ({skipped} duplicates skipped)'
+            }
+                
+        except Exception as e:
+            return {'success': False, 'error': f"Pinterest search download failed: {str(e)}", 'url': url}
+    
+    def _get_pinterest_search_http(self, url: str, callback: Callable = None, max_images: int = 10) -> List[str]:
+        """Get Pinterest search images using HTTP only (fast but limited)"""
+        try:
+            headers = {
+                'User-Agent': self.USER_AGENTS['desktop'],
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Referer': 'https://www.pinterest.com/',
+                'DNT': '1',
+            }
+            
+            response = self.session.get(url, headers=headers, timeout=15)
+            response.raise_for_status()
+            
+            image_urls = []
+            
+            # Look for Pinterest CDN URLs in the HTML
+            pinimg_patterns = [
+                r'(https://i\.pinimg\.com/originals/[a-zA-Z0-9/._-]+\.(?:jpg|jpeg|png|gif|webp))',
+                r'(https://i\.pinimg\.com/736x/[a-zA-Z0-9/._-]+\.(?:jpg|jpeg|png|gif|webp))',
+                r'(https://i\.pinimg\.com/564x/[a-zA-Z0-9/._-]+\.(?:jpg|jpeg|png|gif|webp))',
+                r'(https://i\.pinimg\.com/474x/[a-zA-Z0-9/._-]+\.(?:jpg|jpeg|png|gif|webp))',
+            ]
+            
+            for pattern in pinimg_patterns:
+                matches = re.findall(pattern, response.text)
+                for match in matches:
+                    if match not in image_urls:
+                        # Try to upgrade to highest resolution
+                        high_res_url = self._get_pinterest_high_res(match)
+                        image_urls.append(high_res_url)
+                        if len(image_urls) >= max_images:
+                            break
+                if len(image_urls) >= max_images:
+                    break
+            
+            return image_urls
+            
+        except Exception as e:
+            if callback:
+                callback(f"⚠️ HTTP search failed: {str(e)}")
+            return []
+    
+    def _get_pinterest_search_selenium(self, url: str, callback: Callable = None, max_images: int = 50) -> List[str]:
+        """Get Pinterest search images using Selenium (slower but gets more images)"""
+        if not SELENIUM_AVAILABLE:
+            return []
+        
+        driver = None
+        try:
+            if callback:
+                callback("🌐 Starting browser (this may take a moment)...")
+            
+            driver = self._get_selenium_driver()
+            if not driver:
+                if callback:
+                    callback("❌ Could not start browser")
+                return []
+            
+            if callback:
+                callback("📱 Loading Pinterest search page...")
+            
+            driver.get(url)
+            time.sleep(2)  # Wait for initial load
+            
+            if callback:
+                callback("📜 Scrolling to find more images...")
+            
+            image_urls = []
+            scroll_count = 0
+            max_scrolls = max(5, max_images // 15)  # Adjust scrolls based on desired images
+            no_new_images_count = 0
+            
+            while len(image_urls) < max_images and scroll_count < max_scrolls:
+                # Find pin images
+                prev_count = len(image_urls)
+                try:
+                    pins = driver.find_elements(By.CSS_SELECTOR, 'img[src*="pinimg.com"]')
+                    
+                    for pin in pins:
+                        if len(image_urls) >= max_images:
+                            break
+                        
+                        try:
+                            src = pin.get_attribute('src')
+                            if src and 'pinimg.com' in src:
+                                # Upgrade resolution in URL directly
+                                high_res_url = self._get_pinterest_high_res(src)
+                                
+                                if high_res_url not in image_urls:
+                                    image_urls.append(high_res_url)
+                                    if callback and len(image_urls) % 10 == 0:
+                                        callback(f"🔍 Browser found: {len(image_urls)} images...")
+                        except:
+                            continue
+                except:
+                    pass
+                
+                # Check if we found new images
+                if len(image_urls) == prev_count:
+                    no_new_images_count += 1
+                    if no_new_images_count >= 3:
+                        if callback:
+                            callback("📜 No more new images found, finishing...")
+                        break
+                else:
+                    no_new_images_count = 0
+                
+                # Scroll down to load more images
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                time.sleep(1.5)
+                scroll_count += 1
+            
+            if callback:
+                callback(f"✅ Browser finished - found {len(image_urls)} images")
+            
+            return image_urls
+            
+        except Exception as e:
+            if callback:
+                callback(f"⚠️ Browser search failed: {str(e)}")
+            return []
+        
+        finally:
+            # Always clean up driver
+            if driver:
+                try:
+                    driver.quit()
+                except:
+                    pass
+            self.driver = None
     
     def _extract_pinterest_image_from_json(self, data, depth=0) -> Optional[str]:
         """Recursively extract image URL from Pinterest JSON data"""
@@ -570,15 +788,29 @@ class ImageDownloader:
     
     def _get_pinterest_high_res(self, url: str) -> str:
         """Try to get highest resolution Pinterest image"""
+        if not url or 'pinimg.com' not in url:
+            return url
+            
         # Pinterest URL patterns: /236x/, /474x/, /564x/, /736x/, /originals/
-        resolutions = ['originals', '736x', '564x', '474x', '236x']
+        # Also handle newer patterns like /1200x/ and other sizes
+        resolutions = ['originals', '1200x', '736x', '564x', '474x', '236x']
         
-        for res in resolutions:
+        # First, try to replace any existing resolution with 'originals'
+        for res in resolutions[1:]:  # Skip 'originals' in this loop
             if f'/{res}/' in url:
-                # Already at this resolution, try higher
+                # Try 'originals' first
+                originals_url = url.replace(f'/{res}/', '/originals/')
+                try:
+                    response = self.session.head(originals_url, timeout=5)
+                    if response.status_code == 200:
+                        return originals_url
+                except:
+                    pass
+                
+                # If originals doesn't work, try other high resolutions
                 for higher_res in resolutions:
-                    if higher_res == res:
-                        break
+                    if higher_res == res or higher_res == 'originals':
+                        continue
                     test_url = url.replace(f'/{res}/', f'/{higher_res}/')
                     try:
                         response = self.session.head(test_url, timeout=5)
@@ -588,127 +820,24 @@ class ImageDownloader:
                         continue
                 break
         
+        # If no resolution pattern found, try to add originals path
+        if '/originals/' not in url and 'pinimg.com' in url:
+            # Try to construct originals URL
+            parts = url.split('/')
+            for i, part in enumerate(parts):
+                if 'pinimg.com' in part and i + 1 < len(parts):
+                    # Insert 'originals' after the domain
+                    parts.insert(i + 1, 'originals')
+                    originals_url = '/'.join(parts)
+                    try:
+                        response = self.session.head(originals_url, timeout=5)
+                        if response.status_code == 200:
+                            return originals_url
+                    except:
+                        pass
+                    break
+        
         return url
-    
-    def _download_pinterest_search(self, url: str, output_path: Path,
-                                    callback: Callable = None, max_images: int = 100) -> Dict:
-        """Download images from Pinterest search results using Selenium"""
-        if not SELENIUM_AVAILABLE:
-            return {'success': False, 'error': 'Pinterest search URLs require Selenium. Install with: pip install selenium webdriver-manager', 'url': url}
-        
-        driver = None
-        try:
-            if callback:
-                callback("🌐 Starting browser for Pinterest search...")
-            
-            driver = self._get_selenium_driver()
-            if not driver:
-                return {'success': False, 'error': 'Could not initialize browser for Pinterest search', 'url': url}
-            
-            driver.get(url)
-            time.sleep(3)  # Wait for initial load
-            
-            if callback:
-                callback(f"📜 Scrolling to load images (max {max_images})...")
-            
-            image_urls = []
-            scroll_count = 0
-            max_scrolls = max(10, max_images // 10)  # More scrolls for more images
-            no_new_images_count = 0
-            
-            while len(image_urls) < max_images and scroll_count < max_scrolls:
-                # Find pin images
-                prev_count = len(image_urls)
-                try:
-                    pins = driver.find_elements(By.CSS_SELECTOR, 'img[src*="pinimg.com"]')
-                    
-                    for pin in pins:
-                        if len(image_urls) >= max_images:
-                            break
-                        
-                        try:
-                            src = pin.get_attribute('src')
-                            if src and 'pinimg.com' in src:
-                                # Upgrade resolution in URL directly (no HTTP request)
-                                for res in ['236x', '474x', '564x']:
-                                    if f'/{res}/' in src:
-                                        src = src.replace(f'/{res}/', '/736x/')
-                                        break
-                                
-                                if src not in image_urls:
-                                    image_urls.append(src)
-                                    if callback and len(image_urls) % 10 == 0:
-                                        callback(f"🔍 Found: {len(image_urls)} images...")
-                        except:
-                            continue
-                except:
-                    pass
-                
-                # Check if we found new images
-                if len(image_urls) == prev_count:
-                    no_new_images_count += 1
-                    if no_new_images_count >= 3:
-                        if callback:
-                            callback(f"📜 No more images found after {scroll_count} scrolls")
-                        break
-                else:
-                    no_new_images_count = 0
-                
-                # Scroll down
-                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                time.sleep(1.5)
-                scroll_count += 1
-            
-            if callback:
-                callback(f"🔍 Found total: {len(image_urls)} images")
-            
-            # Close browser immediately after collecting URLs
-            try:
-                driver.quit()
-            except:
-                pass
-            self.driver = None
-            driver = None
-            
-            if not image_urls:
-                return {'success': False, 'error': 'No images found in Pinterest search results', 'url': url}
-            
-            if callback:
-                callback(f"📥 Downloading {len(image_urls)} images from search results...")
-            
-            # Download all found images
-            downloaded = 0
-            failed = 0
-            
-            for i, img_url in enumerate(image_urls):
-                if callback:
-                    callback(f"📥 Downloading {i+1}/{len(image_urls)}...")
-                
-                result = self._download_direct(img_url, output_path, None, None)
-                if result.get('success'):
-                    downloaded += 1
-                else:
-                    failed += 1
-            
-            return {
-                'success': downloaded > 0,
-                'downloaded': downloaded,
-                'failed': failed,
-                'total': len(image_urls),
-                'message': f'Downloaded {downloaded}/{len(image_urls)} images from Pinterest search'
-            }
-                
-        except Exception as e:
-            return {'success': False, 'error': f"Pinterest search download failed: {str(e)}", 'url': url}
-        
-        finally:
-            # Ensure driver is always cleaned up
-            if driver:
-                try:
-                    driver.quit()
-                except:
-                    pass
-            self.driver = None
 
     def _download_instagram(self, url: str, output_path: Path,
                             filename: str = None, callback: Callable = None) -> Dict:
@@ -1087,7 +1216,7 @@ class ImageDownloader:
     def extract_images_from_page(self, url: str, min_size: int = 100,
                                  callback: Callable = None) -> List[str]:
         """
-        Extract all image URLs from a webpage
+        Extract all image URLs from a webpage - fast HTTP-only approach
         
         Args:
             url: Page URL to extract images from
@@ -1101,7 +1230,8 @@ class ImageDownloader:
             if callback:
                 callback(f"🔍 Scanning page for images: {url[:50]}...")
             
-            response = self.session.get(url, timeout=30)
+            # Use fast HTTP requests only - avoid Selenium completely
+            response = self.session.get(url, timeout=15)
             response.raise_for_status()
             
             image_urls = []
@@ -1134,7 +1264,7 @@ class ImageDownloader:
                         image_urls.append(content)
             
             else:
-                # Regex fallback
+                # Regex fallback when BeautifulSoup not available
                 patterns = [
                     r'<img[^>]+src=["\']([^"\']+)["\']',
                     r'url\(["\']?([^"\')\s]+\.(?:jpg|jpeg|png|gif|webp))["\']?\)',
@@ -1163,6 +1293,7 @@ class ImageDownloader:
             if callback:
                 callback(f"⚠ Error scanning page: {e}")
             return []
+
 
 
 # Convenience function for quick downloads

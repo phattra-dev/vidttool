@@ -1,0 +1,16 @@
+# TikTok Cookies File
+# Export cookies from your browser when logged into TikTok
+# Use browser extensions like "Get cookies.txt" or "cookies.txt"
+# 
+# Format: Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+
+# Example (replace with your actual cookies):
+# .tiktok.com	TRUE	/	FALSE	1234567890	sessionid	your_session_id_here
+# .tiktok.com	TRUE	/	FALSE	1234567890	csrf_token	your_csrf_token_here
+
+# Instructions:
+# 1. Install "Get cookies.txt" browser extension
+# 2. Go to tiktok.com and log in
+# 3. Click the extension and export cookies
+# 4. Save as "tiktok_cookies.txt" in this folder

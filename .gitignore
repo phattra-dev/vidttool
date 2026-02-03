@@ -35,3 +35,8 @@ downloads/
 # OS files
 .DS_Store
 Thumbs.db
+# Large test files
+test_downloads/*.mp4
+test_downloads/*.avi
+test_downloads/*.mkv
+test_downloads/*.mov

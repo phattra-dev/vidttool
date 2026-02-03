@@ -5,8 +5,6 @@ Video Downloader Tool - Clean Modern Interface
 
 import sys
 import os
-import re
-import time
 from pathlib import Path
 from urllib.parse import urlparse
 import yt_dlp
@@ -1212,81 +1210,39 @@ class SuccessDialog(QDialog):
     
     def view_video(self):
         """Open file explorer and navigate to the downloaded video"""
-        if self.file_path:
-            file_exists = Path(self.file_path).exists()
-            print(f"DEBUG: file_path = {self.file_path}")
-            print(f"DEBUG: file_exists = {file_exists}")
+        if self.file_path and Path(self.file_path).exists():
+            import subprocess
+            import platform
             
-            if file_exists:
-                import subprocess
-                import platform
+            try:
+                system = platform.system()
+                if system == "Windows":
+                    # Use explorer with /select to highlight the file
+                    subprocess.run(['explorer', '/select,', str(self.file_path)])
+                elif system == "Darwin":  # macOS
+                    subprocess.run(['open', '-R', str(self.file_path)])
+                else:  # Linux
+                    # Open the directory containing the file
+                    subprocess.run(['xdg-open', str(Path(self.file_path).parent)])
                 
+                self.accept()  # Close dialog after opening
+                
+            except Exception as e:
+                # Fallback: just open the directory
                 try:
-                    system = platform.system()
+                    directory = Path(self.file_path).parent
                     if system == "Windows":
-                        # Use explorer with /select to highlight the file
-                        subprocess.run(['explorer', '/select,', str(self.file_path)])
-                    elif system == "Darwin":  # macOS
-                        subprocess.run(['open', '-R', str(self.file_path)])
-                    else:  # Linux
-                        # Open the directory containing the file
-                        subprocess.run(['xdg-open', str(Path(self.file_path).parent)])
-                    
-                    self.accept()  # Close dialog after opening
-                    
-                except Exception as e:
-                    # Fallback: just open the directory
-                    try:
-                        directory = Path(self.file_path).parent
-                        if system == "Windows":
-                            subprocess.run(['explorer', str(directory)])
-                        elif system == "Darwin":
-                            subprocess.run(['open', str(directory)])
-                        else:
-                            subprocess.run(['xdg-open', str(directory)])
-                        self.accept()
-                    except:
-                        # If all else fails, just close the dialog
-                        QMessageBox.warning(self, "Error", f"Could not open file location: {e}")
-            else:
-                # File doesn't exist, let's check if there are similar files in the directory
-                try:
-                    file_path = Path(self.file_path)
-                    directory = file_path.parent
-                    filename_stem = file_path.stem
-                    
-                    print(f"DEBUG: Looking in directory: {directory}")
-                    print(f"DEBUG: Looking for files with stem: {filename_stem}")
-                    
-                    if directory.exists():
-                        # List all files in the directory
-                        all_files = list(directory.glob("*"))
-                        print(f"DEBUG: Files in directory: {[f.name for f in all_files]}")
-                        
-                        # Look for files with similar names
-                        similar_files = [f for f in all_files if filename_stem.lower() in f.stem.lower()]
-                        print(f"DEBUG: Similar files found: {[f.name for f in similar_files]}")
-                        
-                        if similar_files:
-                            # Use the first similar file
-                            actual_file = similar_files[0]
-                            print(f"DEBUG: Using similar file: {actual_file}")
-                            
-                            system = platform.system()
-                            if system == "Windows":
-                                subprocess.run(['explorer', '/select,', str(actual_file)])
-                            elif system == "Darwin":
-                                subprocess.run(['open', '-R', str(actual_file)])
-                            else:
-                                subprocess.run(['xdg-open', str(actual_file.parent)])
-                            self.accept()
-                            return
-                    
-                    QMessageBox.warning(self, "Error", f"Video file not found at expected location:\n{self.file_path}\n\nDirectory exists: {directory.exists()}")
-                except Exception as e:
-                    QMessageBox.warning(self, "Error", f"Video file not found or path not available\nPath: {self.file_path}\nError: {e}")
+                        subprocess.run(['explorer', str(directory)])
+                    elif system == "Darwin":
+                        subprocess.run(['open', str(directory)])
+                    else:
+                        subprocess.run(['xdg-open', str(directory)])
+                    self.accept()
+                except:
+                    # If all else fails, just close the dialog
+                    QMessageBox.warning(self, "Error", f"Could not open file location: {e}")
         else:
-            QMessageBox.warning(self, "Error", "No file path provided")
+            QMessageBox.warning(self, "Error", "Video file not found or path not available")
 
 
 class ProfileInfoDialog(QDialog):
@@ -1414,588 +1370,278 @@ class ProfileDownloadDialog(QDialog):
         self.setup_dialog()
     
     def setup_dialog(self):
-        self.setWindowTitle("Profile Download Settings")
-        self.setFixedSize(1000, 650)  # Increased size for better visibility
+        self.setWindowTitle("Profile Video Download")
+        self.setFixedSize(600, 500)
+        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.WindowCloseButtonHint)
         
-        # Apply comprehensive styling for better visibility
+        # Apply dark theme styling
         self.setStyleSheet("""
             QDialog {
-                background-color: #2b2b2b;
-                color: #ffffff;
-            }
-            QTabWidget {
-                background-color: #2b2b2b;
-                border: none;
-            }
-            QTabWidget::pane {
-                border: 1px solid #555555;
-                background-color: #2b2b2b;
-            }
-            QTabWidget::tab-bar {
-                alignment: center;
-            }
-            QTabBar::tab {
-                background-color: #404040;
-                color: #ffffff;
-                padding: 8px 16px;
-                margin-right: 2px;
-                border-top-left-radius: 4px;
-                border-top-right-radius: 4px;
-            }
-            QTabBar::tab:selected {
-                background-color: #0078d4;
-                color: #ffffff;
-            }
-            QTabBar::tab:hover {
-                background-color: #505050;
-            }
-            QGroupBox {
-                font-weight: bold;
-                font-size: 12px;
-                color: #ffffff;
-                border: 2px solid #555555;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 10px;
-                background-color: #353535;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 8px 0 8px;
-                color: #ffffff;
-                background-color: #353535;
+                background: #161b22;
+                color: #f0f6fc;
+                border: 2px solid #30363d;
+                border-radius: 12px;
             }
             QLabel {
-                color: #ffffff;
-                font-size: 11px;
-                font-weight: normal;
-                padding: 2px;
+                color: #f0f6fc;
+                font-size: 12px;
+                border: none;
                 background: transparent;
             }
-            QLineEdit {
-                background-color: #404040;
-                border: 1px solid #666666;
-                border-radius: 4px;
-                padding: 6px;
-                color: #ffffff;
-                font-size: 11px;
-                min-height: 20px;
+        """)
+        
+        layout = QVBoxLayout(self)
+        layout.setSpacing(15)
+        layout.setContentsMargins(25, 25, 25, 25)
+        
+        # Header with profile info
+        header_layout = QHBoxLayout()
+        
+        profile_icon = QLabel("[P]")
+        profile_icon.setStyleSheet("font-size: 24px; border: none; background: transparent;")
+        
+        profile_info_layout = QVBoxLayout()
+        profile_info_layout.setSpacing(4)
+        
+        profile_name = QLabel(f"Profile: {self.profile_info.get('profile_name', 'Unknown')}")
+        profile_name.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        profile_name.setStyleSheet("color: #58a6ff; font-size: 13px; font-weight: bold;")
+        
+        video_count = QLabel(f"Found {self.profile_info.get('total_found', 0)} videos on {self.profile_info.get('platform', 'Unknown')}")
+        video_count.setStyleSheet("color: #7d8590; font-size: 11px;")
+        
+        profile_info_layout.addWidget(profile_name)
+        profile_info_layout.addWidget(video_count)
+        
+        header_layout.addWidget(profile_icon)
+        header_layout.addLayout(profile_info_layout)
+        header_layout.addStretch()
+        
+        layout.addLayout(header_layout)
+        
+        # Download options
+        options_frame = QFrame()
+        options_frame.setStyleSheet("""
+            QFrame {
+                background: rgba(33, 38, 45, 0.6);
+                border: 1px solid #30363d;
+                border-radius: 8px;
+                padding: 15px;
             }
-            QLineEdit:focus {
-                border: 2px solid #0078d4;
-            }
+        """)
+        
+        options_layout = QVBoxLayout(options_frame)
+        options_layout.setSpacing(10)
+        
+        # Max videos setting
+        max_videos_layout = QHBoxLayout()
+        max_videos_label = QLabel("Maximum videos to download:")
+        max_videos_label.setStyleSheet("color: #f0f6fc; font-size: 11px; font-weight: bold;")
+        
+        self.max_videos_spin = QComboBox()
+        
+        # Adjust options based on how many videos were found
+        total_found = self.profile_info.get('total_found', 0)
+        raw_total = self.profile_info.get('raw_total', total_found)
+        
+        options = ["10", "25", "50", "100", "200"]
+        
+        # Add the exact number found if it's not in our standard options
+        if total_found > 0 and str(total_found) not in options:
+            options.append(str(total_found))
+        
+        # Add "All available" option
+        if total_found > 0:
+            options.append(f"All available ({total_found})")
+        else:
+            options.append("All available")
+        
+        self.max_videos_spin.addItems(options)
+        
+        # Set default selection based on videos found
+        if total_found <= 25:
+            self.max_videos_spin.setCurrentText(f"All available ({total_found})" if total_found > 0 else "All available")
+        elif total_found <= 50:
+            self.max_videos_spin.setCurrentText("50")
+        else:
+            self.max_videos_spin.setCurrentText("100")
+        
+        self.max_videos_spin.setStyleSheet("""
             QComboBox {
-                background-color: #404040;
-                border: 1px solid #666666;
-                border-radius: 4px;
+                background: #21262d;
+                color: #f0f6fc;
+                border: 1px solid #30363d;
+                border-radius: 6px;
                 padding: 6px;
-                color: #ffffff;
                 font-size: 11px;
-                min-height: 20px;
+                min-width: 150px;
             }
-            QComboBox:focus {
-                border: 2px solid #0078d4;
+            QComboBox:hover {
+                border-color: #58a6ff;
             }
             QComboBox::drop-down {
                 border: none;
-                width: 20px;
             }
             QComboBox::down-arrow {
                 image: none;
                 border-left: 5px solid transparent;
                 border-right: 5px solid transparent;
-                border-top: 5px solid #ffffff;
+                border-top: 5px solid #7d8590;
                 margin-right: 5px;
-            }
-            QCheckBox {
-                color: #ffffff;
-                font-size: 11px;
-                spacing: 8px;
-                padding: 4px;
-            }
-            QCheckBox::indicator {
-                width: 16px;
-                height: 16px;
-                border: 1px solid #666666;
-                border-radius: 3px;
-                background-color: #404040;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #0078d4;
-                border: 1px solid #0078d4;
-            }
-            QCheckBox::indicator:checked::after {
-                content: "✓";
-                color: #ffffff;
-                font-weight: bold;
-            }
-            QPushButton {
-                background-color: #0078d4;
-                color: #ffffff;
-                border: none;
-                border-radius: 6px;
-                padding: 10px 20px;
-                font-size: 12px;
-                font-weight: bold;
-                min-width: 80px;
-            }
-            QPushButton:hover {
-                background-color: #106ebe;
-            }
-            QPushButton:pressed {
-                background-color: #005a9e;
-            }
-            QPushButton#cancelButton {
-                background-color: #666666;
-            }
-            QPushButton#cancelButton:hover {
-                background-color: #777777;
             }
         """)
         
-        main_layout = QVBoxLayout(self)
-        main_layout.setSpacing(15)
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        
-        # Header
-        header = QLabel(f"Profile: {self.profile_info.get('profile_name', 'Settings')}")
-        header.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        header.setStyleSheet("font-size: 16px; font-weight: bold; padding: 10px;")
-        main_layout.addWidget(header)
-        
-        # Create UI elements first
-        self.create_ui_elements()
-        
-        # Load saved settings
-        self.load_settings()
-        
-        # Create tabbed interface for better organization
-        tab_widget = QTabWidget()
-        
-        # Tab 1: Basic Settings
-        basic_tab = QWidget()
-        basic_layout = QHBoxLayout(basic_tab)
-        basic_layout.setSpacing(20)
-        basic_layout.setContentsMargins(15, 15, 15, 15)
-        basic_layout.addWidget(self.create_basic_column())
-        basic_layout.addWidget(self.create_quality_column())
-        tab_widget.addTab(basic_tab, "Basic Settings")
-        
-        # Tab 2: Advanced Filters (3-panel layout)
-        filters_tab = QWidget()
-        filters_layout = QHBoxLayout(filters_tab)
-        filters_layout.setSpacing(15)
-        filters_layout.setContentsMargins(15, 15, 15, 15)
-        filters_layout.addWidget(self.create_engagement_panel())
-        filters_layout.addWidget(self.create_content_panel())
-        filters_layout.addWidget(self.create_advanced_options_panel())
-        tab_widget.addTab(filters_tab, "Advanced Filters")
-        
-        # Tab 3: Download Options
-        options_tab = QWidget()
-        options_layout = QVBoxLayout(options_tab)
-        options_layout.setContentsMargins(15, 15, 15, 15)
-        options_layout.addWidget(self.create_download_options_column())
-        options_layout.addStretch()
-        tab_widget.addTab(options_tab, "Download Options")
-        
-        main_layout.addWidget(tab_widget)
-        
-        # Buttons
-        button_layout = QHBoxLayout()
-        button_layout.addStretch()
-        
-        cancel_btn = QPushButton("Cancel")
-        cancel_btn.setObjectName("cancelButton")
-        cancel_btn.clicked.connect(self.reject)
-        
-        download_btn = QPushButton("Start Download")
-        download_btn.clicked.connect(self.accept_and_save)
-        
-        button_layout.addWidget(cancel_btn)
-        button_layout.addWidget(download_btn)
-        main_layout.addLayout(button_layout)
-    
-    def create_ui_elements(self):
-        """Create all form elements"""
-        # Dropdowns
-        self.max_videos_spin = QComboBox()
-        total_found = self.profile_info.get('total_found', 0)
-        options = ["10", "25", "50", "100", "200"]
-        if total_found > 0:
-            options.append(f"All ({total_found})")
-        else:
-            options.append("All available")
-        self.max_videos_spin.addItems(options)
-        
-        self.sort_combo = QComboBox()
-        self.sort_combo.addItems(["Newest first", "Oldest first", "Most popular", "Most liked", "Most commented", "Most shared"])
-        
-        self.quality_combo = QComboBox()
-        self.quality_combo.addItems(["best", "8K", "4K", "2K", "1080p", "720p", "480p", "360p"])
-        
-        self.format_combo = QComboBox()
-        self.format_combo.addItems(["Force H.264 (Compatible)", "mp4 (H.264)", "webm", "any"])
-        
-        # View count filters
-        self.min_views_input = QLineEdit()
-        self.min_views_input.setPlaceholderText("e.g., 1M or 1000000")
-        
-        self.max_views_input = QLineEdit()
-        self.max_views_input.setPlaceholderText("e.g., 10M or 10000000")
-        
-        # Like count filters
-        self.min_likes_input = QLineEdit()
-        self.min_likes_input.setPlaceholderText("e.g., 50K or 50000")
-        
-        self.max_likes_input = QLineEdit()
-        self.max_likes_input.setPlaceholderText("e.g., 1M or 1000000")
-        
-        # Comment count filters
-        self.min_comments_input = QLineEdit()
-        self.min_comments_input.setPlaceholderText("e.g., 100 or 1K")
-        
-        self.max_comments_input = QLineEdit()
-        self.max_comments_input.setPlaceholderText("e.g., 10K or 10000")
-        
-        # Share count filters
-        self.min_shares_input = QLineEdit()
-        self.min_shares_input.setPlaceholderText("e.g., 50 or 1K")
-        
-        self.max_shares_input = QLineEdit()
-        self.max_shares_input.setPlaceholderText("e.g., 5K or 5000")
-        
-        # Duration filters
-        self.min_duration_input = QLineEdit()
-        self.min_duration_input.setPlaceholderText("e.g., 30 (seconds)")
-        
-        self.max_duration_input = QLineEdit()
-        self.max_duration_input.setPlaceholderText("e.g., 300 (seconds)")
-        
-        # Checkboxes
-        self.audio_only_cb = QCheckBox("Audio Only (MP3)")
-        self.subtitles_cb = QCheckBox("Download Subtitles")
-        self.mute_video_cb = QCheckBox("Mute Video")
-        self.create_subfolder_cb = QCheckBox("Create Subfolder")
-        self.create_subfolder_cb.setChecked(True)
-        
-        # Advanced filter checkboxes
-        self.filter_verified_cb = QCheckBox("Verified accounts only")
-        self.filter_trending_cb = QCheckBox("Trending videos only")
-        self.exclude_shorts_cb = QCheckBox("Exclude short videos (<60s)")
-        self.exclude_long_cb = QCheckBox("Exclude long videos (>10min)")
-        
-        # Mutual exclusion
-        self.audio_only_cb.toggled.connect(lambda checked: self.mute_video_cb.setEnabled(not checked))
-        self.mute_video_cb.toggled.connect(lambda checked: self.audio_only_cb.setEnabled(not checked))
-    
-    def create_basic_column(self):
-        """Create basic settings column"""
-        group = QGroupBox("Basic Settings")
-        layout = QVBoxLayout(group)
-        layout.setSpacing(12)
-        layout.setContentsMargins(15, 20, 15, 15)
-        
-        # Max videos
-        max_label = QLabel("Maximum Videos:")
-        max_label.setStyleSheet("font-weight: bold;")
-        layout.addWidget(max_label)
-        layout.addWidget(self.max_videos_spin)
-        
-        # Add spacing
-        layout.addSpacing(15)
+        max_videos_layout.addWidget(max_videos_label)
+        max_videos_layout.addWidget(self.max_videos_spin)
+        max_videos_layout.addStretch()
         
         # Sort order
-        sort_label = QLabel("Download Order:")
-        sort_label.setStyleSheet("font-weight: bold;")
-        layout.addWidget(sort_label)
-        layout.addWidget(self.sort_combo)
+        sort_layout = QHBoxLayout()
+        sort_label = QLabel("Download order:")
+        sort_label.setStyleSheet("color: #f0f6fc; font-size: 11px; font-weight: bold;")
         
-        layout.addStretch()
-        return group
+        self.sort_combo = QComboBox()
+        self.sort_combo.addItems(["Newest first", "Oldest first", "Most popular"])
+        self.sort_combo.setStyleSheet(self.max_videos_spin.styleSheet())
+        
+        sort_layout.addWidget(sort_label)
+        sort_layout.addWidget(self.sort_combo)
+        sort_layout.addStretch()
+        
+        options_layout.addLayout(max_videos_layout)
+        options_layout.addLayout(sort_layout)
+        
+        layout.addWidget(options_frame)
+        
+        # Video preview list
+        preview_label = QLabel("Video Preview:")
+        preview_label.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        preview_label.setStyleSheet("color: #58a6ff; font-size: 11px; font-weight: bold;")
+        layout.addWidget(preview_label)
+        
+        # Scrollable video list
+        self.video_list = QScrollArea()
+        self.video_list.setWidgetResizable(True)
+        self.video_list.setFixedHeight(200)
+        self.video_list.setStyleSheet("""
+            QScrollArea {
+                background: #21262d;
+                border: 1px solid #30363d;
+                border-radius: 6px;
+            }
+            QScrollBar:vertical {
+                background: #161b22;
+                width: 8px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical {
+                background: #30363d;
+                border-radius: 4px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #58a6ff;
+            }
+        """)
+        
+        self.populate_video_list()
+        layout.addWidget(self.video_list)
+        
+        # Action buttons
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(10)
+        
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        self.style_button_secondary(cancel_btn)
+        
+        download_btn = QPushButton("Start Download")
+        download_btn.clicked.connect(self.accept)
+        self.style_button_primary(download_btn)
+        
+        button_layout.addStretch()
+        button_layout.addWidget(cancel_btn)
+        button_layout.addWidget(download_btn)
+        
+        layout.addLayout(button_layout)
     
-    def create_quality_column(self):
-        """Create quality & format column"""
-        group = QGroupBox("Quality & Format")
-        layout = QVBoxLayout(group)
-        layout.setSpacing(12)
-        layout.setContentsMargins(15, 20, 15, 15)
+    def populate_video_list(self):
+        """Populate the video preview list"""
+        container = QWidget()
+        container_layout = QVBoxLayout(container)
+        container_layout.setSpacing(4)
+        container_layout.setContentsMargins(8, 8, 8, 8)
         
-        # Quality
-        quality_label = QLabel("Video Quality:")
-        quality_label.setStyleSheet("font-weight: bold;")
-        layout.addWidget(quality_label)
-        layout.addWidget(self.quality_combo)
+        videos = self.profile_info.get('videos', [])[:10]  # Show first 10 for preview
         
-        # Add spacing
-        layout.addSpacing(15)
+        if not videos:
+            no_videos_label = QLabel("No videos found in this profile")
+            no_videos_label.setStyleSheet("color: #7d8590; font-style: italic; padding: 20px;")
+            no_videos_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            container_layout.addWidget(no_videos_label)
+        else:
+            for i, video in enumerate(videos):
+                video_frame = self.create_video_preview_item(video, i + 1)
+                container_layout.addWidget(video_frame)
+            
+            if len(self.profile_info.get('videos', [])) > 10:
+                more_label = QLabel(f"... and {len(self.profile_info.get('videos', [])) - 10} more videos")
+                more_label.setStyleSheet("color: #7d8590; font-style: italic; padding: 8px; text-align: center;")
+                more_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                container_layout.addWidget(more_label)
         
-        # Format
-        format_label = QLabel("Video Format:")
-        format_label.setStyleSheet("font-weight: bold;")
-        layout.addWidget(format_label)
-        layout.addWidget(self.format_combo)
-        
-        layout.addStretch()
-        return group
+        self.video_list.setWidget(container)
     
-    def create_engagement_panel(self):
-        """Create Panel 1: Engagement Filters (Views & Likes)"""
-        group = QGroupBox("Engagement Filters")
-        layout = QVBoxLayout(group)
-        layout.setSpacing(8)
-        layout.setContentsMargins(12, 15, 12, 12)
+    def create_video_preview_item(self, video, index):
+        """Create a preview item for a video"""
+        frame = QFrame()
+        frame.setStyleSheet("""
+            QFrame {
+                background: rgba(33, 38, 45, 0.5);
+                border: 1px solid #30363d;
+                border-radius: 4px;
+                margin: 1px;
+                padding: 8px;
+            }
+            QFrame:hover {
+                border-color: #58a6ff;
+                background: rgba(88, 166, 255, 0.1);
+            }
+        """)
         
-        # View count filters
-        view_label = QLabel("View Count Range:")
-        view_label.setStyleSheet("font-weight: bold; margin-top: 5px;")
-        layout.addWidget(view_label)
-        
-        min_views_label = QLabel("Min Views:")
-        layout.addWidget(min_views_label)
-        layout.addWidget(self.min_views_input)
-        
-        max_views_label = QLabel("Max Views:")
-        layout.addWidget(max_views_label)
-        layout.addWidget(self.max_views_input)
-        
-        # Add spacing
-        layout.addSpacing(12)
-        
-        # Like count filters
-        like_label = QLabel("Like Count Range:")
-        like_label.setStyleSheet("font-weight: bold; margin-top: 5px;")
-        layout.addWidget(like_label)
-        
-        min_likes_label = QLabel("Min Likes:")
-        layout.addWidget(min_likes_label)
-        layout.addWidget(self.min_likes_input)
-        
-        max_likes_label = QLabel("Max Likes:")
-        layout.addWidget(max_likes_label)
-        layout.addWidget(self.max_likes_input)
-        
-        layout.addStretch()
-        return group
-    
-    def create_content_panel(self):
-        """Create Panel 2: Content Filters (Comments, Shares & Duration)"""
-        group = QGroupBox("Content Filters")
-        layout = QVBoxLayout(group)
-        layout.setSpacing(8)
-        layout.setContentsMargins(12, 15, 12, 12)
-        
-        # Comment count filters
-        comment_label = QLabel("Comment Count Range:")
-        comment_label.setStyleSheet("font-weight: bold; margin-top: 5px;")
-        layout.addWidget(comment_label)
-        
-        min_comments_label = QLabel("Min Comments:")
-        layout.addWidget(min_comments_label)
-        layout.addWidget(self.min_comments_input)
-        
-        max_comments_label = QLabel("Max Comments:")
-        layout.addWidget(max_comments_label)
-        layout.addWidget(self.max_comments_input)
-        
-        # Add spacing
-        layout.addSpacing(10)
-        
-        # Share count filters
-        share_label = QLabel("Share Count Range:")
-        share_label.setStyleSheet("font-weight: bold; margin-top: 5px;")
-        layout.addWidget(share_label)
-        
-        min_shares_label = QLabel("Min Shares:")
-        layout.addWidget(min_shares_label)
-        layout.addWidget(self.min_shares_input)
-        
-        max_shares_label = QLabel("Max Shares:")
-        layout.addWidget(max_shares_label)
-        layout.addWidget(self.max_shares_input)
-        
-        layout.addStretch()
-        return group
-    
-    def create_advanced_options_panel(self):
-        """Create Panel 3: Advanced Options (Verified, Trending, Duration exclusions)"""
-        group = QGroupBox("Advanced Options")
-        layout = QVBoxLayout(group)
-        layout.setSpacing(10)
-        layout.setContentsMargins(12, 15, 12, 12)
-        
-        # Content type filters
-        type_label = QLabel("Content Type Filters:")
-        type_label.setStyleSheet("font-weight: bold; margin-top: 5px;")
-        layout.addWidget(type_label)
-        
-        layout.addWidget(self.filter_verified_cb)
-        layout.addWidget(self.filter_trending_cb)
-        
-        # Add spacing
-        layout.addSpacing(12)
-        
-        # Duration exclusions
-        exclusion_label = QLabel("Duration Exclusions:")
-        exclusion_label.setStyleSheet("font-weight: bold; margin-top: 5px;")
-        layout.addWidget(exclusion_label)
-        
-        layout.addWidget(self.exclude_shorts_cb)
-        layout.addWidget(self.exclude_long_cb)
-        
-        layout.addStretch()
-        return group
-    
-    def create_download_options_column(self):
-        """Create download options column"""
-        group = QGroupBox("Download Options")
-        layout = QVBoxLayout(group)
-        layout.setSpacing(12)
-        layout.setContentsMargins(15, 20, 15, 15)
-        
-        # Audio/Video options
-        media_label = QLabel("Media Options:")
-        media_label.setStyleSheet("font-weight: bold; margin-top: 5px;")
-        layout.addWidget(media_label)
-        layout.addWidget(self.audio_only_cb)
-        layout.addWidget(self.subtitles_cb)
-        layout.addWidget(self.mute_video_cb)
-        
-        # Add spacing
-        layout.addSpacing(15)
-        
-        # File organization
-        org_label = QLabel("File Organization:")
-        org_label.setStyleSheet("font-weight: bold; margin-top: 5px;")
-        layout.addWidget(org_label)
-        layout.addWidget(self.create_subfolder_cb)
-        
-        layout.addStretch()
-        return group
-    
-    def create_advanced_column(self):
-        """Create advanced options column (legacy - kept for compatibility)"""
-        group = QGroupBox("Advanced Options")
-        layout = QVBoxLayout(group)
+        layout = QHBoxLayout(frame)
+        layout.setContentsMargins(8, 6, 8, 6)
         layout.setSpacing(10)
         
-        # View filters section
-        filters_label = QLabel("View Count Filters:")
-        layout.addWidget(filters_label)
+        # Video number
+        number_label = QLabel(f"{index}.")
+        number_label.setStyleSheet("color: #58a6ff; font-weight: bold; font-size: 10px; min-width: 20px;")
         
-        # Min views
-        min_label = QLabel("Min Views:")
-        layout.addWidget(min_label)
-        layout.addWidget(self.min_views_input)
+        # Video info
+        info_layout = QVBoxLayout()
+        info_layout.setSpacing(2)
         
-        # Max views
-        max_label = QLabel("Max Views:")
-        layout.addWidget(max_label)
-        layout.addWidget(self.max_views_input)
+        title = video.get('title', 'Unknown Title')
+        if len(title) > 60:
+            title = title[:60] + "..."
         
-        # Download options section
-        options_label = QLabel("Download Options:")
-        layout.addWidget(options_label)
+        title_label = QLabel(title)
+        title_label.setStyleSheet("color: #f0f6fc; font-size: 10px; font-weight: bold;")
         
-        layout.addWidget(self.audio_only_cb)
-        layout.addWidget(self.subtitles_cb)
-        layout.addWidget(self.mute_video_cb)
-        layout.addWidget(self.create_subfolder_cb)
+        # Duration and uploader
+        duration = video.get('duration', 0)
+        duration_str = f"{int(duration)//60}:{int(duration)%60:02d}" if duration else "Unknown"
         
-        layout.addStretch()
-        return group
-    
-    def load_settings(self):
-        """Load saved settings from QSettings"""
-        settings = QSettings("VideoDownloader", "ProfileDownloadSettings")
+        details_label = QLabel(f"Duration: {duration_str} - Uploader: {video.get('uploader', 'Unknown')}")
+        details_label.setStyleSheet("color: #7d8590; font-size: 9px;")
         
-        # Load dropdown selections
-        max_videos = settings.value("max_videos", "50")
-        if max_videos in [self.max_videos_spin.itemText(i) for i in range(self.max_videos_spin.count())]:
-            self.max_videos_spin.setCurrentText(max_videos)
+        info_layout.addWidget(title_label)
+        info_layout.addWidget(details_label)
         
-        sort_order = settings.value("sort_order", "Newest first")
-        if sort_order in [self.sort_combo.itemText(i) for i in range(self.sort_combo.count())]:
-            self.sort_combo.setCurrentText(sort_order)
+        layout.addWidget(number_label)
+        layout.addLayout(info_layout, 1)
         
-        quality = settings.value("quality", "best")
-        if quality in [self.quality_combo.itemText(i) for i in range(self.quality_combo.count())]:
-            self.quality_combo.setCurrentText(quality)
-        
-        format_type = settings.value("format", "Force H.264 (Compatible)")
-        if format_type in [self.format_combo.itemText(i) for i in range(self.format_combo.count())]:
-            self.format_combo.setCurrentText(format_type)
-        
-        # Load engagement filter inputs
-        self.min_views_input.setText(settings.value("min_views", "", type=str))
-        self.max_views_input.setText(settings.value("max_views", "", type=str))
-        self.min_likes_input.setText(settings.value("min_likes", "", type=str))
-        self.max_likes_input.setText(settings.value("max_likes", "", type=str))
-        self.min_comments_input.setText(settings.value("min_comments", "", type=str))
-        self.max_comments_input.setText(settings.value("max_comments", "", type=str))
-        self.min_shares_input.setText(settings.value("min_shares", "", type=str))
-        self.max_shares_input.setText(settings.value("max_shares", "", type=str))
-        
-        # Load content filter inputs
-        self.min_duration_input.setText(settings.value("min_duration", "", type=str))
-        self.max_duration_input.setText(settings.value("max_duration", "", type=str))
-        
-        # Load checkboxes
-        self.audio_only_cb.setChecked(settings.value("audio_only", False, type=bool))
-        self.subtitles_cb.setChecked(settings.value("subtitles", False, type=bool))
-        self.mute_video_cb.setChecked(settings.value("mute_video", False, type=bool))
-        self.create_subfolder_cb.setChecked(settings.value("create_subfolder", True, type=bool))
-        
-        # Load advanced filter checkboxes
-        self.filter_verified_cb.setChecked(settings.value("filter_verified", False, type=bool))
-        self.filter_trending_cb.setChecked(settings.value("filter_trending", False, type=bool))
-        self.exclude_shorts_cb.setChecked(settings.value("exclude_shorts", False, type=bool))
-        self.exclude_long_cb.setChecked(settings.value("exclude_long", False, type=bool))
-    
-    def save_settings(self):
-        """Save current settings to QSettings"""
-        settings = QSettings("VideoDownloader", "ProfileDownloadSettings")
-        
-        # Save dropdown selections
-        settings.setValue("max_videos", self.max_videos_spin.currentText())
-        settings.setValue("sort_order", self.sort_combo.currentText())
-        settings.setValue("quality", self.quality_combo.currentText())
-        settings.setValue("format", self.format_combo.currentText())
-        
-        # Save engagement filter inputs
-        settings.setValue("min_views", self.min_views_input.text().strip())
-        settings.setValue("max_views", self.max_views_input.text().strip())
-        settings.setValue("min_likes", self.min_likes_input.text().strip())
-        settings.setValue("max_likes", self.max_likes_input.text().strip())
-        settings.setValue("min_comments", self.min_comments_input.text().strip())
-        settings.setValue("max_comments", self.max_comments_input.text().strip())
-        settings.setValue("min_shares", self.min_shares_input.text().strip())
-        settings.setValue("max_shares", self.max_shares_input.text().strip())
-        
-        # Save content filter inputs
-        settings.setValue("min_duration", self.min_duration_input.text().strip())
-        settings.setValue("max_duration", self.max_duration_input.text().strip())
-        
-        # Save checkboxes
-        settings.setValue("audio_only", self.audio_only_cb.isChecked())
-        settings.setValue("subtitles", self.subtitles_cb.isChecked())
-        settings.setValue("mute_video", self.mute_video_cb.isChecked())
-        settings.setValue("create_subfolder", self.create_subfolder_cb.isChecked())
-        
-        # Save advanced filter checkboxes
-        settings.setValue("filter_verified", self.filter_verified_cb.isChecked())
-        settings.setValue("filter_trending", self.filter_trending_cb.isChecked())
-        settings.setValue("exclude_shorts", self.exclude_shorts_cb.isChecked())
-        settings.setValue("exclude_long", self.exclude_long_cb.isChecked())
-        
-        # Force synchronization to ensure settings are written
-        settings.sync()
-    
-    def accept_and_save(self):
-        """Save settings and accept dialog"""
-        self.save_settings()
-        self.accept()
+        return frame
     
     def get_download_settings(self):
         """Get the selected download settings"""
@@ -2011,80 +1657,49 @@ class ProfileDownloadDialog(QDialog):
             except ValueError:
                 max_videos = None
         
-        # Helper function to parse count values with K/M suffixes
-        def parse_count(text):
-            if not text:
-                return None
-            try:
-                if text.lower().endswith('k'):
-                    return int(float(text[:-1]) * 1000)
-                elif text.lower().endswith('m'):
-                    return int(float(text[:-1]) * 1000000)
-                else:
-                    return int(text)
-            except ValueError:
-                return None
-        
-        # Parse all engagement filters
-        min_views = parse_count(self.min_views_input.text().strip())
-        max_views = parse_count(self.max_views_input.text().strip())
-        min_likes = parse_count(self.min_likes_input.text().strip())
-        max_likes = parse_count(self.max_likes_input.text().strip())
-        min_comments = parse_count(self.min_comments_input.text().strip())
-        max_comments = parse_count(self.max_comments_input.text().strip())
-        min_shares = parse_count(self.min_shares_input.text().strip())
-        max_shares = parse_count(self.max_shares_input.text().strip())
-        
-        # Parse duration filters (in seconds)
-        min_duration = None
-        max_duration = None
-        
-        min_duration_text = self.min_duration_input.text().strip()
-        if min_duration_text:
-            try:
-                min_duration = int(min_duration_text)
-            except ValueError:
-                min_duration = None
-        
-        max_duration_text = self.max_duration_input.text().strip()
-        if max_duration_text:
-            try:
-                max_duration = int(max_duration_text)
-            except ValueError:
-                max_duration = None
-        
         return {
             'max_videos': max_videos,
             'sort_order': self.sort_combo.currentText(),
-            'quality': self.quality_combo.currentText(),
-            'format': self.format_combo.currentText(),
-            
-            # Engagement filters
-            'min_views': min_views,
-            'max_views': max_views,
-            'min_likes': min_likes,
-            'max_likes': max_likes,
-            'min_comments': min_comments,
-            'max_comments': max_comments,
-            'min_shares': min_shares,
-            'max_shares': max_shares,
-            
-            # Content filters
-            'min_duration': min_duration,
-            'max_duration': max_duration,
-            'filter_verified': self.filter_verified_cb.isChecked(),
-            'filter_trending': self.filter_trending_cb.isChecked(),
-            'exclude_shorts': self.exclude_shorts_cb.isChecked(),
-            'exclude_long': self.exclude_long_cb.isChecked(),
-            
-            # Download options
-            'audio_only': self.audio_only_cb.isChecked(),
-            'subtitles': self.subtitles_cb.isChecked(),
-            'mute_video': self.mute_video_cb.isChecked(),
-            'create_subfolder': self.create_subfolder_cb.isChecked(),
-            
             'videos': self.profile_info.get('videos', [])
         }
+    
+    def style_button_primary(self, btn):
+        btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #238636, stop:1 #2ea043);
+                color: white;
+                border: none;
+                border-radius: 0px;
+                font-size: 12px;
+                font-weight: bold;
+                padding: 8px 16px;
+                min-width: 120px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #2ea043, stop:1 #238636);
+            }
+        """)
+    
+    def style_button_secondary(self, btn):
+        btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(33, 38, 45, 0.8);
+                color: #f0f6fc;
+                border: 2px solid #30363d;
+                border-radius: 0px;
+                font-size: 12px;
+                font-weight: bold;
+                padding: 8px 16px;
+                min-width: 80px;
+            }
+            QPushButton:hover {
+                border-color: #58a6ff;
+                background: rgba(22, 27, 34, 0.9);
+                color: #58a6ff;
+            }
+        """)
 
 
 class BatchCompleteDialog(QDialog):
@@ -2507,7 +2122,7 @@ class ImageDownloadProgressDialog(QDialog):
         self.status_label.setText(f"Downloading image {current} of {self.total_images}...")
         self.url_label.setText(url[:70] + "..." if len(url) > 70 else url)
         self.stats_label.setText(f"[OK] {successful} saved | [X] {failed} failed")
-        # Remove QApplication.processEvents() - this can cause issues when called from threads
+        QApplication.processEvents()
     
     def cancel_download(self):
         """Handle cancel button click"""
@@ -3112,7 +2727,7 @@ class LicenseActivationDialog(QDialog):
         license_key = self.key_input.text().strip()
         
         if len(license_key) < 19:
-            self.status_label.setText("[!] Please enter a valid license key")
+            self.status_label.setText("⚠️ Please enter a valid license key")
             self.status_label.setStyleSheet("color: #d29922; font-size: 12px;")
             return
         
@@ -3126,7 +2741,7 @@ class LicenseActivationDialog(QDialog):
             result = self.license_client.validate(license_key)
             
             if result.get("valid"):
-                self.status_label.setText("[OK] License activated successfully!")
+                self.status_label.setText("✅ License activated successfully!")
                 self.status_label.setStyleSheet("color: #3fb950; font-size: 12px;")
                 self.activated = True
                 
@@ -3134,12 +2749,12 @@ class LicenseActivationDialog(QDialog):
                 QTimer.singleShot(1500, self.accept)
             else:
                 error = result.get("error", "Unknown error")
-                self.status_label.setText(f"[X] {error}")
+                self.status_label.setText(f"❌ {error}")
                 self.status_label.setStyleSheet("color: #f85149; font-size: 12px;")
                 self.activate_btn.setEnabled(True)
                 self.activate_btn.setText("Activate License")
         else:
-            self.status_label.setText("[X] License system not available")
+            self.status_label.setText("❌ License system not available")
             self.status_label.setStyleSheet("color: #f85149; font-size: 12px;")
             self.activate_btn.setEnabled(True)
             self.activate_btn.setText("Activate License")
@@ -3772,10 +3387,7 @@ class MultipleDownloadWorker(QThread):
         failed_urls = []
         
         for i, url in enumerate(self.urls):
-            # AGGRESSIVE STOP CHECKING - Check multiple stop conditions
-            if (self.stopped or 
-                (hasattr(self.dl, 'abort_download') and self.dl.abort_download) or
-                (hasattr(self.dl, '_stop_requested') and self.dl._stop_requested)):
+            if self.stopped:
                 self.progress.emit("[STOP] Downloads stopped by user")
                 break
             
@@ -3784,19 +3396,11 @@ class MultipleDownloadWorker(QThread):
                 self.progress.emit(f"[OK] Reached target of {self.target_success} successful downloads")
                 break
                 
-            # Wait if paused - but check stop flag frequently during pause
+            # Wait if paused
             while self.paused and not self.stopped:
-                # Check stop flags even during pause
-                if ((hasattr(self.dl, 'abort_download') and self.dl.abort_download) or
-                    (hasattr(self.dl, '_stop_requested') and self.dl._stop_requested)):
-                    self.progress.emit("[STOP] Downloads stopped by user during pause")
-                    return
                 self.msleep(100)
                 
-            # ANOTHER AGGRESSIVE STOP CHECK after pause
-            if (self.stopped or 
-                (hasattr(self.dl, 'abort_download') and self.dl.abort_download) or
-                (hasattr(self.dl, '_stop_requested') and self.dl._stop_requested)):
+            if self.stopped:
                 self.progress.emit("[STOP] Downloads stopped by user")
                 break
             
@@ -3809,20 +3413,10 @@ class MultipleDownloadWorker(QThread):
             else:
                 self.progress.emit(f"[DL] Starting download {i+1}/{total_urls}: {url[:50]}...")
             
-            # IMMEDIATE STOP CHECK after emitting start message
-            if (self.stopped or 
-                (hasattr(self.dl, 'abort_download') and self.dl.abort_download) or
-                (hasattr(self.dl, '_stop_requested') and self.dl._stop_requested)):
-                self.progress.emit("[STOP] Downloads stopped by user before download start")
-                break
-            
             try:
                 # Create progress callback for current video that checks stop flag
                 def progress_callback(message):
-                    # AGGRESSIVE STOP CHECKING in callback
-                    if (self.stopped or 
-                        (hasattr(self.dl, 'abort_download') and self.dl.abort_download) or
-                        (hasattr(self.dl, '_stop_requested') and self.dl._stop_requested)):
+                    if self.stopped:
                         self._current_download_aborted = True
                         raise Exception("Download stopped by user")
                     
@@ -3846,13 +3440,6 @@ class MultipleDownloadWorker(QThread):
                         target = self.target_success if self.target_success else total_urls
                         self.progress_percent.emit(100, f"Video {completed + 1}/{target} complete")
                 
-                # FINAL AGGRESSIVE STOP CHECK right before download
-                if (self.stopped or 
-                    (hasattr(self.dl, 'abort_download') and self.dl.abort_download) or
-                    (hasattr(self.dl, '_stop_requested') and self.dl._stop_requested)):
-                    self.progress.emit("[STOP] Downloads stopped by user before download execution")
-                    break
-                
                 result = self.dl.download(
                     url,
                     self.settings.get('quality', 'best'),
@@ -3865,12 +3452,8 @@ class MultipleDownloadWorker(QThread):
                     progress_callback
                 )
                 
-                # AGGRESSIVE STOP CHECK immediately after download attempt
-                if (self.stopped or 
-                    self._current_download_aborted or 
-                    (hasattr(self.dl, 'abort_download') and self.dl.abort_download) or
-                    (hasattr(self.dl, '_stop_requested') and self.dl._stop_requested)):
-                    self.progress.emit("[STOP] Downloads stopped by user after download attempt")
+                if self.stopped or self._current_download_aborted:
+                    self.progress.emit("[STOP] Downloads stopped by user")
                     break
                 
                 if result['success']:
@@ -3883,13 +3466,6 @@ class MultipleDownloadWorker(QThread):
                         self.progress.emit(f"[OK] Downloaded {completed}/{self.target_success}: {url[:50]}")
                     else:
                         self.progress.emit(f"[OK] Completed {i+1}/{total_urls}: {url[:50]}")
-                        
-                    # STOP CHECK even after successful download
-                    if (self.stopped or 
-                        (hasattr(self.dl, 'abort_download') and self.dl.abort_download) or
-                        (hasattr(self.dl, '_stop_requested') and self.dl._stop_requested)):
-                        self.progress.emit("[STOP] Downloads stopped by user after successful download")
-                        break
                 else:
                     failed += 1
                     failed_urls.append(url)
@@ -3900,19 +3476,9 @@ class MultipleDownloadWorker(QThread):
                     else:
                         self.progress.emit(f"[X] Failed {i+1}/{total_urls}: {url[:50]}")
                     
-                    # STOP CHECK even after failed download
-                    if (self.stopped or 
-                        (hasattr(self.dl, 'abort_download') and self.dl.abort_download) or
-                        (hasattr(self.dl, '_stop_requested') and self.dl._stop_requested)):
-                        self.progress.emit("[STOP] Downloads stopped by user after failed download")
-                        break
-                    
             except Exception as e:
-                if (self.stopped or 
-                    "stopped by user" in str(e).lower() or
-                    (hasattr(self.dl, 'abort_download') and self.dl.abort_download) or
-                    (hasattr(self.dl, '_stop_requested') and self.dl._stop_requested)):
-                    self.progress.emit("[STOP] Downloads stopped by user (exception)")
+                if self.stopped or "stopped by user" in str(e).lower():
+                    self.progress.emit("[STOP] Downloads stopped by user")
                     break
                 failed += 1
                 failed_urls.append(url)
@@ -3922,13 +3488,6 @@ class MultipleDownloadWorker(QThread):
                     self.progress.emit(f"[X] Error (will try next): {str(e)[:50]}")
                 else:
                     self.progress.emit(f"[X] Error {i+1}/{total_urls}: {str(e)}")
-                    
-                # STOP CHECK even after exception
-                if (self.stopped or 
-                    (hasattr(self.dl, 'abort_download') and self.dl.abort_download) or
-                    (hasattr(self.dl, '_stop_requested') and self.dl._stop_requested)):
-                    self.progress.emit("[STOP] Downloads stopped by user after exception")
-                    break
         
         # Send completion summary
         summary = {
@@ -3950,41 +3509,11 @@ class MultipleDownloadWorker(QThread):
         self.paused = False
         
     def stop(self):
-        """Aggressively stop the download worker"""
         self.stopped = True
         self.paused = False
-        
-        # Set ALL possible abort flags immediately
+        # Also set abort flag on downloader
         if hasattr(self.dl, 'abort_download'):
             self.dl.abort_download = True
-        if hasattr(self.dl, '_stop_requested'):
-            self.dl._stop_requested = True
-        else:
-            # Create the flag if it doesn't exist
-            self.dl._stop_requested = True
-        
-        # Mark current download as aborted
-        self._current_download_aborted = True
-        
-        # Emit stop message immediately
-        self.progress.emit("[STOP] URGENT: Stop requested - aborting all downloads immediately")
-        
-        # Request thread interruption
-        self.requestInterruption()
-        
-        # Try to wake up the thread if it's sleeping
-        self.quit()
-        
-        # Additional aggressive stop measures
-        try:
-            # If the thread is in a blocking operation, this might help
-            import signal
-            import os
-            if hasattr(os, 'kill') and hasattr(self, 'pid'):
-                # This is a last resort and might not work in all cases
-                pass
-        except:
-            pass
 
 
 class VideoDownloader:
@@ -4171,35 +3700,7 @@ class VideoDownloader:
             
             # Platform-specific optimizations
             if platform == 'TikTok':
-                # Try enhanced TikTok profile extraction first
-                try:
-                    import sys
-                    import os
-                    sys.path.append(os.path.dirname(__file__))
-                    
-                    from tiktok_profile_fix import TikTokProfileExtractor
-                    
-                    print("[*] Using enhanced TikTok profile extraction...")
-                    extractor = TikTokProfileExtractor()
-                    result = extractor.extract_profile(profile_url, max_videos)
-                    
-                    if result.get('success'):
-                        print(f"[OK] Enhanced TikTok extraction succeeded! Found {len(result['videos'])} videos")
-                        return result
-                    else:
-                        print(f"[X] Enhanced TikTok extraction failed: {result.get('error', 'Unknown error')}")
-                        if 'suggestions' in result:
-                            print("[!] Suggestions:")
-                            for suggestion in result['suggestions']:
-                                print(f"   {suggestion}")
-                        # Continue with fallback method below
-                        
-                except ImportError as e:
-                    print(f"[!] Enhanced TikTok extractor not available: {e}")
-                except Exception as e:
-                    print(f"[!] Enhanced TikTok extractor error: {e}")
-                
-                # TikTok-specific options for better profile extraction (fallback)
+                # TikTok-specific options for better profile extraction
                 opts.update({
                     'extractor_args': {
                         'tiktok': {
@@ -4487,14 +3988,8 @@ class VideoDownloader:
         """Download video with professional error handling and automatic recovery"""
         MAX_RETRIES = 3
         
-        # Log quality settings for debugging
-        if callback:
-            callback(f"[*] Quality requested: {quality}")
-            callback(f"[*] Format preference: {format_pref}")
-        
-        # Reset abort flag at start of each download (but only if not already set by stop command)
-        if not hasattr(self, '_stop_requested'):
-            self.abort_download = False
+        # Reset abort flag at start of each download
+        self.abort_download = False
         
         # Clean up any leftover temp files before starting
         self.cleanup_temp_files()
@@ -4504,8 +3999,7 @@ class VideoDownloader:
         
         # For TikTok, use description (full caption) instead of title (truncated)
         if 'TikTok' in platform:
-            # Use a custom template that cleans the description for filename
-            safe_template = str(self.output_dir / '%(description).80s.%(ext)s')
+            safe_template = str(self.output_dir / '%(description)s.%(ext)s')
         else:
             safe_template = str(self.output_dir / '%(title)s.%(ext)s')
         
@@ -4523,34 +4017,7 @@ class VideoDownloader:
             'nopart': False,             # Use .part files for resumable downloads
             'buffersize': 1024 * 16,     # 16KB buffer for smoother downloads
             'http_chunk_size': 10485760, # 10MB chunks for better reliability
-            'extractor_retries': 3,      # Retry extraction on failure
-            'ignoreerrors': False,       # Don't ignore errors
         }
-        
-        # Add JavaScript runtime support for YouTube high-quality formats (CRITICAL FOR 4K!)
-        if 'YouTube' in platform:
-            opts['extractor_args'] = {
-                'youtube': {
-                    'js_runtimes': ['node']  # Use Node.js for JavaScript execution (enables 4K/2K)
-                }
-            }
-            # Ensure proper audio merging for high-quality formats (FIXES AUDIO ISSUE!)
-            opts['merge_output_format'] = 'mp4'  # Force merge to mp4 with audio
-            opts['keepvideo'] = False  # Don't keep separate video file after merging
-            opts['postprocessors'] = opts.get('postprocessors', [])
-            # Add FFmpeg video remuxer to ensure proper merging
-            opts['postprocessors'].append({
-                'key': 'FFmpegVideoRemuxer',
-                'preferedformat': 'mp4',
-            })
-            if callback:
-                callback("[*] ✅ Audio merging enabled - you'll get ONE file with sound")
-                callback("[*] ✅ FFmpeg post-processing configured for proper merging")
-        
-        # Add TikTok-specific filename sanitization
-        if 'TikTok' in platform:
-            opts['restrictfilenames'] = False  # Allow Unicode characters and spaces
-            opts['windowsfilenames'] = False   # Don't replace spaces with underscores
         
         # Note: Don't use cookiesfrombrowser here - it causes errors when browser is open
         # The direct Facebook downloader handles cookies separately
@@ -4612,53 +4079,6 @@ class VideoDownloader:
                             self.cleanup_temp_files(last_filename[0])
             opts['progress_hooks'] = [hook]
         
-            # Add format info logging to show what was actually downloaded
-            def format_info_postprocessor(info):
-                """Post-processor to log actual format information"""
-                try:
-                    format_id = info.get('format_id', 'unknown')
-                    height = info.get('height', 'unknown') 
-                    width = info.get('width', 'unknown')
-                    vcodec = info.get('vcodec', 'unknown')
-                    acodec = info.get('acodec', 'unknown')
-                    filesize = info.get('filesize') or info.get('filesize_approx', 0)
-                    
-                    callback(f"[*] ✅ DOWNLOADED FORMAT ID: {format_id}")
-                    callback(f"[*] ✅ ACTUAL RESOLUTION: {width}x{height}")
-                    callback(f"[*] ✅ VIDEO CODEC: {vcodec}")
-                    callback(f"[*] ✅ AUDIO CODEC: {acodec}")
-                    if filesize:
-                        size_mb = filesize / (1024 * 1024)
-                        callback(f"[*] ✅ FILE SIZE: {size_mb:.1f} MB")
-                    
-                    # Provide codec-specific recommendations
-                    if vcodec and 'av01' in vcodec.lower():
-                        callback(f"[*] 📺 CODEC INFO: Downloaded AV1 format - if video appears unclear, try VLC Media Player or update your video player")
-                    elif vcodec and ('avc1' in vcodec.lower() or 'h264' in vcodec.lower()):
-                        callback(f"[*] 📺 CODEC INFO: Downloaded H.264 format - widely compatible with most players")
-                    elif vcodec and 'vp9' in vcodec.lower():
-                        callback(f"[*] 📺 CODEC INFO: Downloaded VP9 format - good quality, works best with modern players")
-                    
-                    # Check if we got the quality we wanted
-                    requested_height = get_height_from_quality(quality) if quality != 'best' else 'best'
-                    if quality != 'best' and height != 'unknown':
-                        if int(height) >= int(requested_height):
-                            callback(f"[*] ✅ SUCCESS: Got {height}p (requested {requested_height}p or higher)")
-                        else:
-                            callback(f"[*] ⚠️ LOWER QUALITY: Got {height}p (requested {requested_height}p)")
-                    
-                    # Add player recommendations for best quality viewing
-                    if height != 'unknown' and int(height) >= 1440:
-                        callback(f"[*] 💡 TIP: For best {height}p quality viewing, use VLC Media Player, PotPlayer, or MPC-HC")
-                    
-                except Exception as e:
-                    callback(f"[*] Could not get format info: {str(e)}")
-                
-                return [], info  # Return empty list and unchanged info
-            
-            # Skip the PythonHook postprocessor as it's causing compatibility issues
-            # Format info is already shown in the callback messages above
-        
         # For TikTok, first get info and clean the description, then download
         if 'TikTok' in platform:
             try:
@@ -4685,7 +4105,7 @@ class VideoDownloader:
         def get_height_from_quality(q):
             quality_map = {
                 '8K': '4320',
-                '4K': '2160', 
+                '4K': '2160',
                 '2K': '1440',
                 '1080p': '1080',
                 '720p': '720',
@@ -4694,13 +4114,7 @@ class VideoDownloader:
                 '240p': '240',
                 '144p': '144'
             }
-            # Handle both exact matches and 'p' suffix
-            if q in quality_map:
-                return quality_map[q]
-            elif q.endswith('p') and q[:-1].isdigit():
-                return q[:-1]
-            else:
-                return q
+            return quality_map.get(q, q[:-1] if q.endswith('p') else q)
         
         if audio_only:
             opts['format'] = 'bestaudio/best'
@@ -4728,64 +4142,20 @@ class VideoDownloader:
                         # For quality selection, still try hd/sd first as fallback
                         opts['format'] = f'best[ext=mp4][height<={height}]/best[height<={height}]/hd/sd/best'
                 elif 'YouTube' in platform:
-                    # YouTube-specific format selection for maximum quality
-                    if callback:
-                        callback(f"[*] Checking available formats for YouTube video...")
-                    
-                    # First, let's see what formats are available
-                    try:
-                        import yt_dlp
-                        with yt_dlp.YoutubeDL({'quiet': True, 'listformats': True}) as ydl:
-                            info = ydl.extract_info(url, download=False)
-                            if info and 'formats' in info:
-                                formats = info['formats']
-                                if callback:
-                                    callback(f"[*] Found {len(formats)} available formats")
-                                    # Show top quality formats
-                                    video_formats = [f for f in formats if f.get('vcodec') != 'none' and f.get('height')]
-                                    video_formats.sort(key=lambda x: x.get('height', 0), reverse=True)
-                                    for i, fmt in enumerate(video_formats[:5]):  # Show top 5
-                                        height = fmt.get('height', 'unknown')
-                                        format_id = fmt.get('format_id', 'unknown')
-                                        vcodec = fmt.get('vcodec', 'unknown')
-                                        filesize = fmt.get('filesize') or fmt.get('filesize_approx', 0)
-                                        size_str = f" ({filesize/(1024*1024):.0f}MB)" if filesize else ""
-                                        callback(f"[*] Format {i+1}: {format_id} - {height}p ({vcodec}){size_str}")
-                    except Exception as e:
-                        if callback:
-                            callback(f"[*] Could not list formats: {str(e)}")
-                    
+                    # YouTube-specific format selection to handle SABR streaming
+                    # Prefer formats that don't require JS runtime
                     if quality == 'best':
-                        # For best quality, try 4K VP9 with audio (WORKING!)
-                        opts['format'] = '313+140'  # 4K VP9 video + best audio (CONFIRMED WORKING!)
-                        if callback:
-                            callback(f"[*] 🎯 Attempting best quality download using format 313+140 (4K VP9 + audio)")
+                        opts['format'] = 'best[vcodec*=avc1]/best[vcodec*=h264]/bestvideo[vcodec*=avc1]+bestaudio/best'
                     else:
                         height = get_height_from_quality(quality)
-                        # For specific quality, use direct format IDs with audio that actually work
-                        if int(height) >= 2160:  # 4K or higher
-                            # Use direct format IDs that we CONFIRMED work with latest yt-dlp
-                            opts['format'] = '313+140'  # 4K VP9 video + best audio (CONFIRMED WORKING!)
-                            if callback:
-                                callback(f"[*] 🎯 Attempting 4K download using format 313+140 (4K VP9 + audio)")
-                        elif int(height) >= 1440:  # 2K
-                            # Use direct format ID for 2K with audio
-                            opts['format'] = '271+140'  # 2K VP9 video + best audio
-                            if callback:
-                                callback(f"[*] 🎯 Attempting 2K download using format 271+140 (2K VP9 + audio)")
-                        elif int(height) >= 1080:  # 1080p
-                            opts['format'] = '137+140'  # 1080p H.264 video + best audio
-                            if callback:
-                                callback(f"[*] 🎯 Attempting 1080p download using format 137+140 (H.264 + audio)")
-                        else:
-                            opts['format'] = 'best'  # For lower qualities, use best available
+                        opts['format'] = f'best[vcodec*=avc1][height<={height}]/best[vcodec*=h264][height<={height}]/bestvideo[vcodec*=avc1][height<={height}]+bestaudio/best[height<={height}]'
                     
-                    if callback:
-                        callback(f"[*] YouTube format string: {opts['format']}")
-                        callback(f"[*] Target height: {get_height_from_quality(quality) if quality != 'best' else 'maximum'}")
-                    
-                    # Use minimal options that actually work (same as successful test)
-                    # Remove complex extractor args that cause "Only images available" error
+                    # Add YouTube-specific extractor args to improve reliability
+                    opts['extractor_args'] = opts.get('extractor_args', {})
+                    opts['extractor_args']['youtube'] = {
+                        'player_client': ['android', 'web'],  # Use multiple clients for better format availability
+                        'skip': ['dash', 'hls'],  # Skip problematic formats when possible
+                    }
                 else:
                     # General format selection for other platforms
                     if quality == 'best':
@@ -4793,10 +4163,6 @@ class VideoDownloader:
                     else:
                         height = get_height_from_quality(quality)
                         opts['format'] = f'best[vcodec*=avc1][height<={height}]/best[vcodec*=h264][height<={height}]/best[ext=mp4][height<={height}]/best[height<={height}]'
-                    
-                    if callback:
-                        callback(f"[*] {platform} format string: {opts['format']}")
-                        callback(f"[*] Target height: {get_height_from_quality(quality) if quality != 'best' else 'maximum'}")
                 
                 # Add post-processor to convert to H.264 if HEVC is still downloaded
                 if force_convert or format_pref == 'Force H.264 (Compatible)':
@@ -4809,7 +4175,7 @@ class VideoDownloader:
                             'preferedformat': 'mp4',
                         }]
                         if callback:
-                            callback("[*] FFmpeg available - will convert HEVC/H.265 to H.264 if needed")
+                            callback("[*] FFmpeg available - will convert if needed")
                     except (subprocess.CalledProcessError, FileNotFoundError):
                         if callback:
                             callback("[!] FFmpeg not found - downloading best available format")
@@ -4843,85 +4209,11 @@ class VideoDownloader:
                 height = get_height_from_quality(quality)
                 opts['format'] = 'best[ext=webm]/best' if quality == 'best' else f'best[ext=webm][height<={height}]/best[height<={height}]'
             else:  # 'any'
-                # For YouTube, use the specific 4K/2K format selection even with 'any' preference
-                platform = self.detect_platform(url)
-                if 'YouTube' in platform:
-                    # YouTube-specific format selection for maximum quality
-                    if callback:
-                        callback(f"[*] Checking available formats for YouTube video...")
-                    
-                    # First, let's see what formats are available
-                    try:
-                        import yt_dlp
-                        with yt_dlp.YoutubeDL({'quiet': True, 'listformats': True}) as ydl:
-                            info = ydl.extract_info(url, download=False)
-                            if info and 'formats' in info:
-                                formats = info['formats']
-                                if callback:
-                                    callback(f"[*] Found {len(formats)} available formats")
-                                    # Show top quality formats
-                                    video_formats = [f for f in formats if f.get('vcodec') != 'none' and f.get('height')]
-                                    video_formats.sort(key=lambda x: x.get('height', 0), reverse=True)
-                                    for i, fmt in enumerate(video_formats[:5]):  # Show top 5
-                                        height = fmt.get('height', 'unknown')
-                                        format_id = fmt.get('format_id', 'unknown')
-                                        vcodec = fmt.get('vcodec', 'unknown')
-                                        filesize = fmt.get('filesize') or fmt.get('filesize_approx', 0)
-                                        size_str = f" ({filesize/(1024*1024):.0f}MB)" if filesize else ""
-                                        callback(f"[*] Format {i+1}: {format_id} - {height}p ({vcodec}){size_str}")
-                    except Exception as e:
-                        if callback:
-                            callback(f"[*] Could not list formats: {str(e)}")
-                    
-                    if quality == 'best':
-                        # For best quality, try 4K VP9 with audio (WORKING!)
-                        opts['format'] = '313+140'  # 4K VP9 video + best audio (CONFIRMED WORKING!)
-                        if callback:
-                            callback(f"[*] 🎯 Attempting best quality download using format 313+140 (4K VP9 + audio)")
-                    else:
-                        height = get_height_from_quality(quality)
-                        # For specific quality, use direct format IDs with audio that actually work
-                        if int(height) >= 2160:  # 4K or higher
-                            # Use direct format IDs that we CONFIRMED work with latest yt-dlp
-                            opts['format'] = '313+140'  # 4K VP9 video + best audio (CONFIRMED WORKING!)
-                            if callback:
-                                callback(f"[*] 🎯 Attempting 4K download using format 313+140 (4K VP9 + audio)")
-                        elif int(height) >= 1440:  # 2K
-                            # Use direct format ID for 2K with audio
-                            opts['format'] = '271+140'  # 2K VP9 video + best audio
-                            if callback:
-                                callback(f"[*] 🎯 Attempting 2K download using format 271+140 (2K VP9 + audio)")
-                        elif int(height) >= 1080:  # 1080p
-                            opts['format'] = '137+140'  # 1080p H.264 video + best audio
-                            if callback:
-                                callback(f"[*] 🎯 Attempting 1080p download using format 137+140 (H.264 + audio)")
-                        else:
-                            opts['format'] = 'best'  # For lower qualities, use best available
-                    
-                    if callback:
-                        callback(f"[*] YouTube format string: {opts['format']}")
-                        callback(f"[*] Target height: {get_height_from_quality(quality) if quality != 'best' else 'maximum'}")
-                else:
-                    # For non-YouTube platforms, use generic format selection
-                    height = get_height_from_quality(quality)
-                    opts['format'] = 'best' if quality == 'best' else f'best[height<={height}]'
+                height = get_height_from_quality(quality)
+                opts['format'] = 'best' if quality == 'best' else f'best[height<={height}]'
         
         if subtitle:
             opts['writesubtitles'] = True
-            opts['writeautomaticsub'] = True
-            
-            # TikTok-specific subtitle options
-            platform = self.detect_platform(url)
-            if 'TikTok' in platform:
-                # TikTok often has auto-generated captions and user-added text
-                opts['subtitleslangs'] = ['en', 'en-US', 'auto']
-                opts['writeinfojson'] = True  # Get metadata that might contain captions
-                # Try to extract text overlay/captions from TikTok
-                opts['extractor_args'] = {
-                    'tiktok': {
-                        'webpage_url_basename': 'video'
-                    }
-                }
         
         try:
             if callback:
@@ -4934,488 +4226,267 @@ class VideoDownloader:
                 # For TikTok, try the seamless integration first to avoid error messages
                 platform = self.detect_platform(url)
                 if 'TikTok' in platform:
-                    # Check abort flag before starting TikTok processing
-                    if self.abort_download:
-                        raise Exception("Download aborted by user")
-                        
                     if callback:
                         callback("[*] Processing TikTok with seamless integration...")
-                    
-                    # First try to extract captions/text if subtitle is enabled
-                    if subtitle:
-                        try:
-                            if callback:
-                                callback("[*] Extracting TikTok captions...")
-                            
-                            # Extract video info to get description/captions
-                            with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
-                                info = ydl.extract_info(url, download=False)
-                                
-                                # Extract text content from TikTok
-                                caption_text = ""
-                                if info.get('description'):
-                                    caption_text += info['description'] + "\n"
-                                if info.get('title'):
-                                    caption_text += info['title'] + "\n"
-                                
-                                # Save as subtitle file if we have text
-                                if caption_text.strip():
-                                    # Generate subtitle filename
-                                    video_id = re.search(r'/video/(\d+)', url)
-                                    if video_id:
-                                        subtitle_filename = f"tiktok_{video_id.group(1)}.srt"
-                                    else:
-                                        import time
-                                        subtitle_filename = f"tiktok_{int(time.time())}.srt"
-                                    
-                                    subtitle_path = self.output_dir / subtitle_filename
-                                    
-                                    # Create simple SRT format
-                                    srt_content = f"""1
-00:00:00,000 --> 00:00:10,000
-{caption_text.strip()}
-
-"""
-                                    
-                                    with open(subtitle_path, 'w', encoding='utf-8') as f:
-                                        f.write(srt_content)
-                                    
-                                    if callback:
-                                        callback(f"[OK] TikTok captions saved: {subtitle_filename}")
-                                        
-                        except Exception as e:
-                            if callback:
-                                callback(f"[!] Caption extraction failed: {str(e)[:50]}...")
                     
                     # Use the seamless TikTok downloader directly
                     try:
                         from tiktok_seamless_integration import integrate_tiktok_download
                         
-                        # Extract video info to get caption for filename
-                        try:
-                            import yt_dlp
-                            with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
-                                info = ydl.extract_info(url, download=False)
-                                
-                                # Get caption/description for filename
-                                caption = info.get('description', '').strip()
-                                if not caption:
-                                    caption = info.get('title', '').strip()
-                                
-                                # Clean caption for filename
-                                if caption:
-                                    safe_caption = self._clean_tiktok_caption_for_filename(caption)
-                                    
-                                    if safe_caption:
-                                        output_filename = f"{safe_caption}.mp4"
-                                    else:
-                                        # Fallback to video ID
-                                        video_id = re.search(r'/video/(\d+)', url)
-                                        output_filename = f"tiktok_{video_id.group(1)}.mp4" if video_id else f"tiktok_{int(time.time())}.mp4"
-                                else:
-                                    # Fallback to video ID
-                                    video_id = re.search(r'/video/(\d+)', url)
-                                    output_filename = f"tiktok_{video_id.group(1)}.mp4" if video_id else f"tiktok_{int(time.time())}.mp4"
-                                    
-                        except Exception as e:
-                            if callback:
-                                callback(f"[!] Failed to extract caption for filename: {str(e)[:50]}...")
-                            # Fallback to video ID
-                            video_id = re.search(r'/video/(\d+)', url)
-                            output_filename = f"tiktok_{video_id.group(1)}.mp4" if video_id else f"tiktok_{int(time.time())}.mp4"
+                        # Generate output filename
+                        import re
+                        video_id = re.search(r'/video/(\d+)', url)
+                        if video_id:
+                            output_filename = f"tiktok_{video_id.group(1)}.mp4"
+                        else:
+                            import time
+                            output_filename = f"tiktok_{int(time.time())}.mp4"
                         
                         output_path = self.output_dir / output_filename
                         
                         # Try seamless download directly
-                        def abort_check():
-                            return self.abort_download or (hasattr(self, '_stop_requested') and self._stop_requested)
-                        
-                        success = integrate_tiktok_download(url, str(output_path), callback, abort_callback=abort_check)
-                        
-                        # Check abort immediately after TikTok integration
-                        if self.abort_download:
-                            raise Exception("Download aborted by user")
+                        success = integrate_tiktok_download(url, str(output_path), callback)
                         
                         if success and output_path.exists():
                             downloaded_file = output_path
-                            
-                            # Extract OCR captions if subtitle is enabled
-                            if subtitle:
-                                try:
-                                    if callback:
-                                        callback("[*] Extracting text overlays from video...")
-                                    
-                                    from tiktok_ocr_captions import extract_tiktok_captions
-                                    captions = extract_tiktok_captions(output_path, callback)
-                                    
-                                    if captions:
-                                        if callback:
-                                            callback(f"[OK] Extracted {len(captions)} text overlays from video")
-                                    else:
-                                        if callback:
-                                            callback("[!] No text overlays found in video")
-                                            
-                                except ImportError:
-                                    if callback:
-                                        callback("[!] OCR libraries not installed. Install: pip install opencv-python pytesseract easyocr")
-                                except Exception as e:
-                                    if callback:
-                                        callback(f"[!] OCR extraction failed: {str(e)[:50]}...")
-                            
                             if callback:
                                 callback(f"[OK] TikTok video downloaded successfully!")
                             return {'success': True, 'file_path': downloaded_file}
                         else:
-                            # Seamless integration failed, try yt-dlp fallback
+                            # Seamless integration failed, provide clean message
                             if callback:
-                                callback("[!] Seamless TikTok method failed, trying yt-dlp fallback...")
-                            
-                            # Update opts to use the specific output path for TikTok fallback
-                            opts['outtmpl'] = str(output_path)  # Use exact path instead of template
-                            
-                            # Continue to standard yt-dlp approach below instead of returning error
+                                callback("[!] TikTok temporarily unavailable - try again later")
+                                callback("[!] YouTube and other platforms work perfectly")
+                            return {'success': False, 'error': 'TikTok temporarily blocked'}
                     
                     except ImportError:
                         # Fallback if seamless integration not available
                         if callback:
                             callback("[!] TikTok integration not available")
-                        # Continue to standard yt-dlp approach below
+                        pass
                 
                 # For non-TikTok or if seamless failed, use standard approach
-                if callback:
-                    callback("[DEBUG] Starting yt-dlp fallback section")
-                    callback(f"[DEBUG] Platform: {platform}")
-                    callback(f"[DEBUG] opts format: {opts.get('format', 'not set')}")
-                
-                # Ensure yt_dlp is imported
-                import yt_dlp
-                
-                try:
-                    with yt_dlp.YoutubeDL(opts) as ydl:
-                        if callback:
-                            callback("[DEBUG] yt-dlp YoutubeDL object created successfully")
-                        
-                        # Extract info to get the final filename
-                        if callback:
-                            callback("[DEBUG] Attempting to extract info...")
-                        info = ydl.extract_info(url, download=False)
-                        
-                        if callback:
-                            callback("[DEBUG] Info extracted successfully, preparing filename...")
-                        expected_filename = ydl.prepare_filename(info)
-                        
-                        if callback:
-                            callback(f"[DEBUG] Expected filename: {expected_filename}")
-                        
-                        # For TikTok with subtitles, try to extract additional caption info
-                    if subtitle and 'TikTok' in platform:
-                        try:
-                            if callback:
-                                callback("[*] Extracting TikTok text content...")
-                            
-                            # Create enhanced subtitle from TikTok metadata
-                            caption_parts = []
-                            if info.get('description'):
-                                caption_parts.append(f"Description: {info['description']}")
-                            if info.get('title') and info['title'] != info.get('description'):
-                                caption_parts.append(f"Title: {info['title']}")
-                            if info.get('uploader'):
-                                caption_parts.append(f"Creator: @{info['uploader']}")
-                            
-                            if caption_parts:
-                                # Create subtitle file with TikTok content
-                                base_name = Path(expected_filename).stem
-                                subtitle_path = self.output_dir / f"{base_name}.srt"
-                                
-                                srt_content = f"""1
-00:00:00,000 --> 00:00:05,000
-{chr(10).join(caption_parts)}
-
-"""
-                                
-                                with open(subtitle_path, 'w', encoding='utf-8') as f:
-                                    f.write(srt_content)
-                                
-                                if callback:
-                                    callback(f"[OK] TikTok text content saved as subtitle")
-                                    
-                        except Exception as e:
-                            if callback:
-                                callback(f"[!] TikTok text extraction failed: {str(e)[:50]}...")
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    # Extract info to get the final filename
+                    info = ydl.extract_info(url, download=False)
+                    expected_filename = ydl.prepare_filename(info)
                     
-                    # Download the video with platform-specific error handling and retry strategies
-                    download_success = False
-                    
-                    # For YouTube, try specific format IDs that we know work with latest yt-dlp
-                    # For other platforms (like TikTok), use the format preference already set in opts
-                    if 'YouTube' in platform and quality != 'best':
-                        height = get_height_from_quality(quality)
-                        if int(height) >= 2160:  # 4K
-                            # Use specific 4K format IDs WITH AUDIO that actually work
-                            format_strategies = [
-                                '313+140',  # 4K VP9 + audio (FIXED!)
-                                '401+140',  # 4K AV1 + audio (FIXED!)
-                                '271+140',  # 2K VP9 + audio fallback
-                                '137+140',  # 1080p H.264 + audio fallback
-                                'best'  # Final fallback
-                            ]
-                            if callback:
-                                callback(f"[*] 🎯 Attempting 4K download using working format IDs WITH AUDIO")
-                        elif int(height) >= 1440:  # 2K
-                            format_strategies = [
-                                '271+140',  # 2K VP9 + audio (FIXED!)
-                                '400+140',  # 2K AV1 + audio (FIXED!)
-                                '137+140',  # 1080p H.264 + audio fallback
-                                'best'
-                            ]
-                            if callback:
-                                callback(f"[*] 🎯 Attempting 2K download using working format IDs WITH AUDIO")
-                        elif int(height) >= 1080:  # 1080p
-                            format_strategies = [
-                                '137+140',  # 1080p H.264 + audio (FIXED!)
-                                '248+140',  # 1080p VP9 + audio (FIXED!)
-                                'best'
-                            ]
-                        else:
-                            format_strategies = ['best']
-                    elif 'YouTube' in platform:
-                        # YouTube 'best' quality with specific format strategies
-                        format_strategies = ['313+140', '401+140', '271+140', '137+140', 'best']  # Try 4K with audio first
-                        if callback:
-                            callback(f"[*] 🎯 Attempting highest quality download (4K preferred)")
-                    else:
-                        # For non-YouTube platforms (TikTok, Facebook, etc.), use single attempt with format already set in opts
-                        format_strategies = [opts.get('format', 'best')]
-                        if callback and 'TikTok' in platform:
-                            callback(f"[*] 🎯 Using TikTok H.264 format preference: {opts.get('format', 'best')}")
-                    
-                    if callback:
-                        callback(f"[DEBUG] Format strategies: {format_strategies}")
-                    
-                    # Try each format strategy
-                    if callback:
-                        callback(f"[DEBUG] About to try {len(format_strategies)} format strategies")
-                    
-                    for i, format_str in enumerate(format_strategies):
-                        try:
-                            if callback and i > 0:
-                                callback(f"[*] 🔄 Trying format {format_str} (attempt {i+1}/{len(format_strategies)})")
-                            
-                            # Update format for this attempt
-                            current_opts = opts.copy()
-                            current_opts['format'] = format_str
-                            
-                            with yt_dlp.YoutubeDL(current_opts) as ydl:
-                                ydl.download([url])
-                                download_success = True
-                                
-                                # Show success message with format info
-                                if callback:
-                                    format_info = {
-                                        '313+140': '4K VP9 + audio (excellent quality, ~657MB)',
-                                        '313': '4K VP9 video-only (excellent quality, ~657MB)',
-                                        '401+140': '4K AV1 + audio (excellent quality, ~398MB)', 
-                                        '401': '4K AV1 video-only (excellent quality, ~398MB)',
-                                        '271+140': '2K VP9 + audio (high quality, ~258MB)',
-                                        '271': '2K VP9 video-only (high quality, ~258MB)',
-                                        '400+140': '2K AV1 + audio (high quality, ~200MB)',
-                                        '400': '2K AV1 video-only (high quality, ~200MB)',
-                                        '137+140': '1080p H.264 + audio (good quality, ~131MB)',
-                                        '137': '1080p H.264 video-only (good quality, ~131MB)',
-                                        '248+140': '1080p VP9 + audio (good quality)',
-                                        '248': '1080p VP9 video-only (good quality)'
-                                    }
-                                    info = format_info.get(format_str, f'Format {format_str}')
-                                    callback(f"[*] ✅ SUCCESS! Downloaded using {info}")
-                                    
-                                    # Emphasize that user will get ONE file with audio
-                                    if '+140' in format_str:
-                                        callback(f"[*] 🎵 AUDIO INCLUDED: You'll get ONE file with sound!")
-                                    elif format_str in ['313', '401', '271', '400', '137', '248']:
-                                        callback(f"[*] ⚠️ VIDEO ONLY: This format doesn't include audio")
-                                break
-                                
-                        except Exception as strategy_error:
-                            error_msg = str(strategy_error).lower()
-                            if callback:
-                                if 'requested format is not available' in error_msg:
-                                    callback(f"[*] ⚠️ Format {format_str} blocked, trying next...")
-                                elif 'only images are available' in error_msg and i < len(format_strategies) - 1:
-                                    callback(f"[*] ⚠️ YouTube blocking format {format_str}, trying next...")
-                                elif i == len(format_strategies) - 1:  # Last strategy failed
-                                    callback(f"[!] ❌ All format strategies failed - YouTube restrictions too strong")
-                            
-                            if i == len(format_strategies) - 1:  # Last strategy, re-raise error
-                                raise strategy_error
-                    
-                    if not download_success:
-                        raise Exception("All download strategies failed")
-                    
-                    # Initialize downloaded_file
-                    downloaded_file = None
+                    # Download the video
+                    ydl.download([url])
                     
                     # The actual file might have a different extension after processing
                     base_path = Path(expected_filename).with_suffix('')
                     possible_extensions = ['.mp4', '.webm', '.mkv', '.avi', '.mov']
                     
-                    # For TikTok fallback, check the specific output_path first
-                    if 'TikTok' in platform and 'output_path' in locals() and output_path:
-                        if output_path.exists():
-                            downloaded_file = output_path
-                        else:
-                            # Check with different extensions
-                            for ext in possible_extensions:
-                                potential_file = output_path.with_suffix(ext)
-                                if potential_file.exists():
-                                    downloaded_file = potential_file
-                                    break
+                    for ext in possible_extensions:
+                        potential_file = base_path.with_suffix(ext)
+                        if potential_file.exists():
+                            downloaded_file = potential_file
+                            break
                     
-                    # If not found yet, try the standard expected filename approach
-                    if not downloaded_file:
+                    # If not found, try the original expected filename
+                    if not downloaded_file and Path(expected_filename).exists():
+                        downloaded_file = Path(expected_filename)
+                        
+            except Exception as format_error:
+                # If format selection fails, try with simpler format
+                if callback:
+                    callback("[!] Format selection failed, trying simpler format...")
+                
+                # TikTok-specific seamless integration without failure messages
+                platform = self.detect_platform(url)
+                if 'TikTok' in platform:
+                    if callback:
+                        callback("[*] Processing TikTok video with seamless integration...")
+                    
+                    # Use the new seamless TikTok downloader
+                    try:
+                        from tiktok_seamless_integration import integrate_tiktok_download
+                        
+                        # Generate output filename
+                        import re
+                        video_id = re.search(r'/video/(\d+)', url)
+                        if video_id:
+                            output_filename = f"tiktok_{video_id.group(1)}.mp4"
+                        else:
+                            import time
+                            output_filename = f"tiktok_{int(time.time())}.mp4"
+                        
+                        output_path = self.output_dir / output_filename
+                        
+                        # Try seamless download
+                        success = integrate_tiktok_download(url, str(output_path), callback)
+                        
+                        if success and output_path.exists():
+                            downloaded_file = output_path
+                            if callback:
+                                callback(f"[OK] TikTok video downloaded successfully!")
+                        else:
+                            # Only show minimal feedback if all methods fail
+                            if callback:
+                                callback("[!] TikTok temporarily unavailable - try again later")
+                                callback("[!] YouTube and other platforms work perfectly")
+                            
+                            # Skip verbose failure messages - keep it clean
+                            pass
+                    
+                    except ImportError:
+                        # Advanced downloader not available, fall back to original method
+                        if callback:
+                            callback("[!] Advanced TikTok downloader not available, using basic methods...")
+                        
+                        # Original 3-method fallback system (keeping as backup)
+                        # Method 1: Try standard extraction with simple format
+                        try:
+                            if callback:
+                                callback("[1/3] Trying standard extraction...")
+                            simple_opts = opts.copy()
+                            simple_opts['format'] = 'best'
+                            
+                            with yt_dlp.YoutubeDL(simple_opts) as ydl:
+                                info = ydl.extract_info(url, download=False)
+                                expected_filename = ydl.prepare_filename(info)
+                                ydl.download([url])
+                                
+                                # Find the downloaded file
+                                base_path = Path(expected_filename).with_suffix('')
+                                possible_extensions = ['.mp4', '.webm', '.mkv', '.avi', '.mov']
+                                
+                                for ext in possible_extensions:
+                                    potential_file = base_path.with_suffix(ext)
+                                    if potential_file.exists():
+                                        downloaded_file = potential_file
+                                        break
+                                
+                                if downloaded_file:
+                                    if callback:
+                                        callback("[OK] Standard extraction successful")
+                                    # Success - continue with normal flow
+                                else:
+                                    raise Exception("File not found after download")
+                                    
+                        except Exception as e1:
+                            if callback:
+                                callback(f"[!] Standard method failed: {str(e1)[:100]}...")
+                            
+                            # Method 2: Try with cookies if available
+                            cookies_file = Path("cookies/tiktok_cookies.txt")
+                            if cookies_file.exists() and cookies_file.stat().st_size > 500:
+                                try:
+                                    if callback:
+                                        callback("[2/3] Trying with cookies...")
+                                    
+                                    cookie_opts = opts.copy()
+                                    cookie_opts['format'] = 'best'
+                                    cookie_opts['cookiefile'] = str(cookies_file)
+                                    
+                                    with yt_dlp.YoutubeDL(cookie_opts) as ydl:
+                                        info = ydl.extract_info(url, download=False)
+                                        expected_filename = ydl.prepare_filename(info)
+                                        ydl.download([url])
+                                        
+                                        # Find the downloaded file
+                                        base_path = Path(expected_filename).with_suffix('')
+                                        possible_extensions = ['.mp4', '.webm', '.mkv', '.avi', '.mov']
+                                        
+                                        for ext in possible_extensions:
+                                            potential_file = base_path.with_suffix(ext)
+                                            if potential_file.exists():
+                                                downloaded_file = potential_file
+                                                break
+                                        
+                                        if downloaded_file:
+                                            if callback:
+                                                callback("[OK] Cookie extraction successful")
+                                            # Success - continue with normal flow
+                                        else:
+                                            raise Exception("File not found after download")
+                                            
+                                except Exception as e2:
+                                    if callback:
+                                        callback(f"[!] Cookie method failed: {str(e2)[:100]}...")
+                            
+                            # Method 3: Try with mobile user agent
+                            if not downloaded_file:
+                                try:
+                                    if callback:
+                                        callback("[3/3] Trying with mobile user agent...")
+                                    
+                                    mobile_opts = opts.copy()
+                                    mobile_opts['format'] = 'best'
+                                    mobile_opts['http_headers'] = {
+                                        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
+                                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                                        'Accept-Language': 'en-US,en;q=0.9',
+                                    }
+                                    
+                                    with yt_dlp.YoutubeDL(mobile_opts) as ydl:
+                                        info = ydl.extract_info(url, download=False)
+                                        expected_filename = ydl.prepare_filename(info)
+                                        ydl.download([url])
+                                        
+                                        # Find the downloaded file
+                                        base_path = Path(expected_filename).with_suffix('')
+                                        possible_extensions = ['.mp4', '.webm', '.mkv', '.avi', '.mov']
+                                        
+                                        for ext in possible_extensions:
+                                            potential_file = base_path.with_suffix(ext)
+                                            if potential_file.exists():
+                                                downloaded_file = potential_file
+                                                break
+                                        
+                                        if downloaded_file:
+                                            if callback:
+                                                callback("[OK] Mobile user agent successful")
+                                            # Success - continue with normal flow
+                                        else:
+                                            raise Exception("File not found after download")
+                                            
+                                except Exception as e3:
+                                    if callback:
+                                        callback(f"[!] Mobile method failed: {str(e3)[:100]}...")
+                            
+                            # All TikTok methods failed - minimal feedback
+                            if not downloaded_file:
+                                if callback:
+                                    callback("[!] TikTok temporarily unavailable - try again later")
+                                    callback("[!] YouTube and other platforms work perfectly")
+                                
+                                # Re-raise with minimal context
+                                raise Exception(f"TikTok extraction failed - temporary issue. Original error: {str(format_error)}")
+                
+                # For non-TikTok platforms, use the original simple format fallback
+                if not downloaded_file and 'TikTok' not in platform:
+                    # Create simpler options
+                    simple_opts = opts.copy()
+                    
+                    # For Facebook, try hd/sd format IDs first, then fall back to best
+                    if 'Facebook' in platform:
+                        simple_opts['format'] = 'hd/sd/best'
+                    else:
+                        simple_opts['format'] = 'best'  # Just get the best available format
+                    
+                    with yt_dlp.YoutubeDL(simple_opts) as ydl:
+                        info = ydl.extract_info(url, download=False)
+                        expected_filename = ydl.prepare_filename(info)
+                        ydl.download([url])
+                        
+                        # Find the downloaded file
+                        base_path = Path(expected_filename).with_suffix('')
+                        possible_extensions = ['.mp4', '.webm', '.mkv', '.avi', '.mov']
+                        
                         for ext in possible_extensions:
                             potential_file = base_path.with_suffix(ext)
                             if potential_file.exists():
                                 downloaded_file = potential_file
                                 break
                     
-                    # If not found, try the original expected filename
                     if not downloaded_file and Path(expected_filename).exists():
                         downloaded_file = Path(expected_filename)
-                    
-                    # If still not found, this is an error
-                    if not downloaded_file:
-                        raise Exception(f"Download completed but file not found. Expected: {expected_filename}")
-                    
-                    # Ensure downloaded_file is a Path object
-                    if isinstance(downloaded_file, str):
-                        downloaded_file = Path(downloaded_file)
-                
-                except Exception as yt_dlp_error:
-                    if callback:
-                        callback(f"[DEBUG] yt-dlp fallback failed: {str(yt_dlp_error)}")
-                        callback("[DEBUG] This explains why yt-dlp fallback didn't work")
-                    # Continue to the format selection failed section below
-                    
-                    # Extract OCR captions for TikTok if subtitle is enabled and file was downloaded
-                    if subtitle and 'TikTok' in platform and downloaded_file and downloaded_file.exists():
-                        try:
-                            if callback:
-                                callback("[*] Extracting text overlays from TikTok video...")
-                            
-                            from tiktok_ocr_captions import extract_tiktok_captions
-                            captions = extract_tiktok_captions(downloaded_file, callback)
-                            
-                            if captions:
-                                if callback:
-                                    callback(f"[OK] Extracted {len(captions)} text overlays from video")
-                            else:
-                                if callback:
-                                    callback("[!] No text overlays found in video")
-                                    
-                        except ImportError:
-                            if callback:
-                                callback("[!] OCR libraries not installed. Install: pip install opencv-python pytesseract easyocr")
-                        except Exception as e:
-                            if callback:
-                                callback(f"[!] OCR extraction failed: {str(e)[:50]}...")
-                        
-            except Exception as format_error:
-                # Check for YouTube-specific issues
-                error_msg = str(format_error).lower()
-                platform = self.detect_platform(url)
-                
-                if 'YouTube' in platform and ('only images are available' in error_msg or 'n challenge solving failed' in error_msg or 'javascript runtime' in error_msg):
-                    # YouTube has implemented new restrictions
-                    if callback:
-                        callback("[!] ⚠️ YouTube Quality Restriction Detected")
-                        callback("[*] YouTube now requires JavaScript runtime for high-quality videos")
-                        callback("[*] This is a recent change by YouTube to prevent automated downloads")
-                        callback("[*] Solutions:")
-                        callback("[*]   1. Try a different video URL")
-                        callback("[*]   2. Use lower quality settings (720p or below)")
-                        callback("[*]   3. Install Node.js or Deno for JavaScript support")
-                        callback("[*]   4. Some videos may not be downloadable due to YouTube restrictions")
-                    
-                    # Try with very basic format for YouTube
-                    try:
-                        if callback:
-                            callback("[*] Attempting basic quality download...")
-                        
-                        import yt_dlp  # Import here to ensure it's available
-                        basic_opts = opts.copy()
-                        basic_opts['format'] = 'worst[ext=mp4]/worst'  # Try lowest quality that might work
-                        
-                        with yt_dlp.YoutubeDL(basic_opts) as ydl:
-                            info = ydl.extract_info(url, download=False)
-                            expected_filename = ydl.prepare_filename(info)
-                            ydl.download([url])
-                            
-                            # Find the downloaded file
-                            downloaded_file = self.find_downloaded_file(expected_filename)
-                            
-                            if downloaded_file:
-                                if callback:
-                                    callback(f"[OK] Downloaded basic quality video (YouTube restrictions apply)")
-                                return {'success': True, 'file_path': downloaded_file}
-                    except:
-                        pass  # Fall through to general error handling
-                
-                # If format selection fails, try with simpler format
-                if callback:
-                    callback("[!] Format selection failed, trying simpler format...")
-                
-                # For non-TikTok platforms, try simpler format options
-                platform = self.detect_platform(url)
-                if 'TikTok' not in platform:
-                    # Try basic format for non-TikTok platforms
-                    try:
-                        simple_opts = opts.copy()
-                        simple_opts['format'] = 'best'
-                        
-                        with yt_dlp.YoutubeDL(simple_opts) as ydl:
-                            info = ydl.extract_info(url, download=False)
-                            expected_filename = ydl.prepare_filename(info)
-                            ydl.download([url])
-                            
-                            # Find the downloaded file
-                            base_path = Path(expected_filename).with_suffix('')
-                            possible_extensions = ['.mp4', '.webm', '.mkv', '.avi', '.mov']
-                            
-                            for ext in possible_extensions:
-                                potential_file = base_path.with_suffix(ext)
-                                if potential_file.exists():
-                                    downloaded_file = potential_file
-                                    break
-                            
-                            if downloaded_file:
-                                if callback:
-                                    callback("[OK] Simple format download successful")
-                    except Exception as simple_error:
-                        if callback:
-                            callback(f"[!] Simple format also failed: {str(simple_error)[:50]}...")
-                else:
-                    # For TikTok, we already tried seamless integration and yt-dlp fallback above
-                    # No additional methods to try
-                    if callback:
-                        callback("[!] All TikTok download methods have been exhausted")
-            
-            # Add debugging for successful downloads
-            if callback:
-                callback(f"[DEBUG] Final downloaded_file: {downloaded_file}")
-                callback(f"[DEBUG] File exists: {downloaded_file.exists() if downloaded_file else 'N/A'}")
-            
-            # If no file was downloaded, this should be an error, not success
-            if not downloaded_file:
-                raise Exception("Download completed but no file was found")
             
             return {'success': True, 'file_path': downloaded_file}
             
         except Exception as e:
-            # Add debugging for file path issues
-            if callback:
-                callback(f"[DEBUG] downloaded_file at error: {downloaded_file}")
-                callback(f"[DEBUG] Error: {str(e)}")
-            
             error_str = str(e).lower()
             
             # Clean up temp files after error
@@ -5488,38 +4559,6 @@ class VideoDownloader:
             if callback:
                 callback(f"[X] Error: {friendly_error}")
             return {'success': False, 'error': friendly_error}
-
-    def _clean_tiktok_caption_for_filename(self, caption):
-        """Clean TikTok caption text for use as filename"""
-        if not caption:
-            return None
-        
-        # Remove common TikTok mentions that clutter filenames
-        import re
-        
-        # Remove mentions but keep hashtags
-        caption = re.sub(r'@\w+', '', caption)
-        
-        # Remove URLs
-        caption = re.sub(r'http[s]?://\S+', '', caption)
-        
-        # Remove extra whitespace and newlines
-        caption = re.sub(r'\s+', ' ', caption).strip()
-        
-        # Keep only alphanumeric, spaces, hyphens, hashtags
-        safe_caption = "".join(c for c in caption if c.isalnum() or c in (' ', '-', '#', '.')).strip()
-        
-        # Remove multiple consecutive spaces
-        safe_caption = re.sub(r' +', ' ', safe_caption)
-        
-        # Limit length to 80 characters
-        if len(safe_caption) > 80:
-            safe_caption = safe_caption[:80].rstrip(' ')
-        
-        # Ensure it's not empty and doesn't start/end with space
-        safe_caption = safe_caption.strip()
-        
-        return safe_caption if safe_caption else None
 
 
 class Worker(QThread):
@@ -5607,15 +4646,11 @@ class Worker(QThread):
 
 
 class MainWindow(QMainWindow):
-    VERSION = "1.2.2"
+    VERSION = "1.2.0"
     APP_ID = None  # Unique installation ID
     
     def __init__(self):
         super().__init__()
-        
-        # Configure font for better Unicode support
-        self.setup_fonts()
-        
         self.dl = VideoDownloader()
         self.worker = None
         self.multi_worker = None  # For multiple downloads
@@ -5632,28 +4667,6 @@ class MainWindow(QMainWindow):
         
         # Add a small delay to ensure UI is fully ready, then retry setting directory
         QTimer.singleShot(100, self.retry_set_directory)
-    
-    def setup_fonts(self):
-        """Configure fonts for better Unicode support"""
-        try:
-            # Set default application font with Unicode support
-            app = QApplication.instance()
-            if app:
-                # Try to use a font that supports Unicode characters
-                font_families = ["Segoe UI", "Arial Unicode MS", "DejaVu Sans", "Liberation Sans", "Arial"]
-                
-                for font_family in font_families:
-                    font = QFont(font_family, 9)
-                    if font.exactMatch():
-                        app.setFont(font)
-                        break
-                else:
-                    # Fallback to default system font
-                    font = QFont()
-                    font.setPointSize(9)
-                    app.setFont(font)
-        except Exception as e:
-            print(f"[!] Font setup warning: {e}")
         
         # Check for FFmpeg and show info
         QTimer.singleShot(500, self.check_ffmpeg)
@@ -5882,13 +4895,13 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(30, 30, 30, 30)
         
         # Header
-        header = QLabel(f"[!] New Version Available!")
+        header = QLabel(f"🚀 New Version Available!")
         header.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
         header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(header)
         
         # Version info
-        version_info = QLabel(f"v{self.VERSION} -> v{new_version}")
+        version_info = QLabel(f"v{self.VERSION} → v{new_version}")
         version_info.setFont(QFont("Segoe UI", 14))
         version_info.setStyleSheet("color: #58a6ff;")
         version_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -6128,8 +5141,6 @@ class MainWindow(QMainWindow):
         self.multiple_tab = self.create_multiple_download_tab()
         self.profile_tab = self.create_profile_download_tab()
         self.image_tab = self.create_image_download_tab()
-        # self.bg_remove_tab = self.create_bg_remove_tab()  # REMOVED - Background removal not working properly
-        # self.image_tools_tab = self.create_image_tools_tab()  # REMOVED - Image tools not working properly
         self.edit_tab = self.create_edit_videos_tab()
         
         # Add tabs to widget
@@ -6137,8 +5148,6 @@ class MainWindow(QMainWindow):
         self.tab_widget.addTab(self.multiple_tab, "Multiple Download")
         self.tab_widget.addTab(self.profile_tab, "Profile Video Download")
         self.tab_widget.addTab(self.image_tab, "Image Download")
-        # self.tab_widget.addTab(self.bg_remove_tab, "Remove Background")  # REMOVED
-        # self.tab_widget.addTab(self.image_tools_tab, "Image Tools")  # REMOVED
         self.tab_widget.addTab(self.edit_tab, "Edit Videos")
         
         # Connect tab change to auto-save
@@ -6623,56 +5632,78 @@ class MainWindow(QMainWindow):
         
         # === DOWNLOAD OPTIONS SECTION ===
         options_frame = self.create_section("Download Options")
-        options_layout = QVBoxLayout()
-        options_layout.setSpacing(12)
+        options_grid = QGridLayout()
+        options_grid.setSpacing(10)
+        options_grid.setColumnStretch(1, 1)
+        options_grid.setColumnStretch(3, 1)
+        options_grid.setColumnStretch(5, 1)
         
-        # Simple options row
-        options_row = QHBoxLayout()
-        options_row.setSpacing(12)
+        # Quality, Format, Max Videos in one row
+        options_grid.addWidget(self.create_label("Quality:"), 0, 0)
+        self.profile_quality = QComboBox()
+        self.profile_quality.addItems(["best", "8K", "4K", "2K", "1080p", "720p", "480p", "360p"])
+        self.profile_quality.setFixedHeight(32)
+        self.style_combo(self.profile_quality)
+        self.profile_quality.currentTextChanged.connect(self.auto_save_settings)
+        options_grid.addWidget(self.profile_quality, 0, 1)
         
-        # Output directory
-        options_row.addWidget(self.create_label("Save to:"))
+        options_grid.addWidget(self.create_label("Format:"), 0, 2)
+        self.profile_format = QComboBox()
+        self.profile_format.addItems(["Force H.264 (Compatible)", "mp4 (H.264)", "webm", "any"])
+        self.profile_format.setFixedHeight(32)
+        self.style_combo(self.profile_format)
+        self.profile_format.currentTextChanged.connect(self.auto_save_settings)
+        options_grid.addWidget(self.profile_format, 0, 3)
+        
+        options_grid.addWidget(self.create_label("Max Videos:"), 0, 4)
+        self.profile_max_videos = QComboBox()
+        self.profile_max_videos.addItems(["10", "25", "50", "100", "All available"])
+        self.profile_max_videos.setCurrentText("50")
+        self.profile_max_videos.setFixedHeight(32)
+        self.style_combo(self.profile_max_videos)
+        self.profile_max_videos.currentTextChanged.connect(self.auto_save_settings)
+        options_grid.addWidget(self.profile_max_videos, 0, 5)
+        
+        # Checkboxes row
+        self.profile_audio_cb = QCheckBox("Audio Only (MP3)")
+        self.profile_subtitle_cb = QCheckBox("Download Subtitles")
+        self.profile_mute_cb = QCheckBox("Mute Video")
+        self.profile_create_subfolder_cb = QCheckBox("Create Subfolder")
+        self.profile_create_subfolder_cb.setChecked(True)
+        self.style_checkbox(self.profile_audio_cb)
+        self.style_checkbox(self.profile_subtitle_cb)
+        self.style_checkbox(self.profile_mute_cb)
+        self.style_checkbox(self.profile_create_subfolder_cb)
+        self.profile_audio_cb.toggled.connect(self.auto_save_settings)
+        self.profile_subtitle_cb.toggled.connect(self.auto_save_settings)
+        self.profile_mute_cb.toggled.connect(self.auto_save_settings)
+        self.profile_create_subfolder_cb.toggled.connect(self.auto_save_settings)
+        self.profile_audio_cb.toggled.connect(lambda checked: self.profile_mute_cb.setEnabled(not checked))
+        self.profile_mute_cb.toggled.connect(lambda checked: self.profile_audio_cb.setEnabled(not checked))
+        options_grid.addWidget(self.profile_audio_cb, 1, 0, 1, 1)
+        options_grid.addWidget(self.profile_subtitle_cb, 1, 1, 1, 1)
+        options_grid.addWidget(self.profile_mute_cb, 1, 2, 1, 1)
+        options_grid.addWidget(self.profile_create_subfolder_cb, 1, 3, 1, 3)
+        
+        # Output directory row
+        options_grid.addWidget(self.create_label("Save to:"), 2, 0)
+        output_row = QHBoxLayout()
         self.profile_output = QLineEdit()
         self.profile_output.setPlaceholderText("downloads/profiles")
         self.profile_output.setFixedHeight(32)
         self.style_input(self.profile_output)
         self.profile_output.textChanged.connect(self.auto_save_settings)
-        options_row.addWidget(self.profile_output)
         
         browse_btn = QPushButton("Browse")
         browse_btn.setFixedSize(70, 32)
         browse_btn.clicked.connect(self.browse_profile_output)
         self.style_btn_secondary(browse_btn)
-        options_row.addWidget(browse_btn)
         
-        options_row.addSpacing(20)
+        output_row.addWidget(self.profile_output)
+        output_row.addWidget(browse_btn)
+        options_grid.addLayout(output_row, 2, 1, 1, 5)
         
-        # Settings button that opens the ProfileDownloadDialog
-        settings_btn = QPushButton("Settings")
-        settings_btn.setFixedHeight(32)
-        settings_btn.setMinimumWidth(100)
-        settings_btn.clicked.connect(self.show_profile_download_settings)
-        settings_btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #6366f1, stop:1 #4f46e5);
-                color: white;
-                border: none;
-                border-radius: 6px;
-                font-size: 12px;
-                font-weight: bold;
-                padding: 8px 16px;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #818cf8, stop:1 #6366f1);
-            }
-            QPushButton:pressed {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4f46e5, stop:1 #4338ca);
-            }
-        """)
-        options_row.addWidget(settings_btn)
-        
-        options_layout.addLayout(options_row)
-        options_frame.layout().addLayout(options_layout)
+        options_frame.layout().addLayout(options_grid)
         layout.addWidget(options_frame)
         
         # === INFO & PROGRESS (side by side) ===
@@ -6911,398 +5942,6 @@ class MainWindow(QMainWindow):
         self._image_pinterest_max = 50  # Max images for Pinterest search URLs
         
         self.image_download_stopped = False
-        
-        return tab_widget
-    
-    # REMOVED: Background removal and image tools tabs - not working properly
-    # def create_bg_remove_tab(self):
-    #     """Create Remove Background tab"""
-    #     # Method removed - background removal functionality not working properly
-    #     pass
-    
-    # def create_image_tools_tab(self):
-    #     """Create Image Tools tab with various image processing features"""
-    #     # Method removed - image tools functionality not working properly
-    #     pass
-
-    def create_edit_videos_tab(self):
-        tab_widget = QWidget()
-        layout = QVBoxLayout(tab_widget)
-        layout.setSpacing(16)
-        layout.setContentsMargins(0, 0, 0, 0)
-        
-        # === INPUT SECTION ===
-        input_frame = self.create_section("Select Images")
-        input_layout = QVBoxLayout()
-        input_layout.setSpacing(12)
-        
-        # File selection row
-        file_row = QHBoxLayout()
-        
-        self.bg_input_display = QLineEdit()
-        self.bg_input_display.setPlaceholderText("No images selected...")
-        self.bg_input_display.setFixedHeight(44)
-        self.bg_input_display.setReadOnly(True)
-        self.style_input(self.bg_input_display)
-        file_row.addWidget(self.bg_input_display)
-        
-        browse_files_btn = QPushButton("Browse Files")
-        browse_files_btn.setFixedSize(100, 44)
-        browse_files_btn.clicked.connect(self.browse_bg_input_files)
-        self.style_btn_secondary(browse_files_btn)
-        file_row.addWidget(browse_files_btn)
-        
-        browse_folder_btn = QPushButton("Browse Folder")
-        browse_folder_btn.setFixedSize(110, 44)
-        browse_folder_btn.clicked.connect(self.browse_bg_input_folder)
-        self.style_btn_secondary(browse_folder_btn)
-        file_row.addWidget(browse_folder_btn)
-        
-        input_layout.addLayout(file_row)
-        
-        # Buttons row
-        btn_row = QHBoxLayout()
-        
-        self.bg_options_btn = QPushButton("Options")
-        self.bg_options_btn.setFixedHeight(38)
-        self.bg_options_btn.setMinimumWidth(100)
-        self.bg_options_btn.clicked.connect(self.show_bg_options_dialog)
-        self.style_btn_green(self.bg_options_btn)
-        
-        self.bg_process_btn = QPushButton("Remove Backgrounds")
-        self.bg_process_btn.setFixedHeight(38)
-        self.bg_process_btn.setMinimumWidth(160)
-        self.bg_process_btn.clicked.connect(self.process_remove_backgrounds)
-        self.style_btn_primary(self.bg_process_btn)
-        
-        self.bg_stop_btn = QPushButton("Stop")
-        self.bg_stop_btn.setFixedHeight(38)
-        self.bg_stop_btn.setMinimumWidth(80)
-        self.bg_stop_btn.setEnabled(False)
-        self.bg_stop_btn.clicked.connect(self.stop_bg_processing)
-        self.bg_stop_btn.setStyleSheet("""
-            QPushButton {
-                background: rgba(248, 81, 73, 0.8);
-                color: white;
-                border: none;
-                border-radius: 0px;
-                font-weight: bold;
-            }
-            QPushButton:hover { background: rgba(248, 81, 73, 1.0); }
-            QPushButton:disabled { background: #21262d; color: #484f58; }
-        """)
-        
-        btn_row.addStretch()
-        btn_row.addWidget(self.bg_options_btn)
-        btn_row.addSpacing(10)
-        btn_row.addWidget(self.bg_process_btn)
-        btn_row.addSpacing(10)
-        btn_row.addWidget(self.bg_stop_btn)
-        
-        input_layout.addLayout(btn_row)
-        input_frame.layout().addLayout(input_layout)
-        layout.addWidget(input_frame)
-        
-        # === OUTPUT SECTION ===
-        output_frame = self.create_section("Output Directory")
-        output_layout = QVBoxLayout()
-        output_layout.setSpacing(12)
-        
-        output_row = QHBoxLayout()
-        self.bg_output_dir = QLineEdit()
-        self.bg_output_dir.setText("downloads/no_background")
-        self.bg_output_dir.setFixedHeight(44)
-        self.style_input(self.bg_output_dir)
-        output_row.addWidget(self.bg_output_dir)
-        
-        browse_output_btn = QPushButton("Browse")
-        browse_output_btn.setFixedSize(80, 44)
-        browse_output_btn.clicked.connect(self.browse_bg_output_dir)
-        self.style_btn_secondary(browse_output_btn)
-        output_row.addWidget(browse_output_btn)
-        
-        output_layout.addLayout(output_row)
-        output_frame.layout().addLayout(output_layout)
-        layout.addWidget(output_frame)
-        
-        # === PROGRESS SECTION ===
-        progress_frame = self.create_section("Progress")
-        progress_layout = QVBoxLayout()
-        progress_layout.setSpacing(8)
-        
-        # Status and progress
-        status_row = QHBoxLayout()
-        self.bg_status_label = QLabel("Ready to process images")
-        self.bg_status_label.setStyleSheet("color: #58a6ff; font-weight: bold; font-size: 12px;")
-        status_row.addWidget(self.bg_status_label)
-        status_row.addStretch()
-        
-        self.bg_file_count_label = QLabel("0 files selected")
-        self.bg_file_count_label.setStyleSheet("color: #7d8590; font-size: 11px;")
-        status_row.addWidget(self.bg_file_count_label)
-        
-        progress_layout.addLayout(status_row)
-        
-        self.bg_progress_bar = QProgressBar()
-        self.bg_progress_bar.setFixedHeight(18)
-        self.bg_progress_bar.setStyleSheet("""
-            QProgressBar {
-                background: #21262d;
-                border: none;
-                border-radius: 0px;
-                text-align: center;
-                color: #f0f6fc;
-                font-size: 10px;
-            }
-            QProgressBar::chunk {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #238636, stop:1 #2ea043);
-            }
-        """)
-        progress_layout.addWidget(self.bg_progress_bar)
-        
-        # Log text
-        self.bg_log_text = QTextEdit()
-        self.bg_log_text.setReadOnly(True)
-        self.bg_log_text.setPlaceholderText("Processing log will appear here...")
-        self.bg_log_text.setStyleSheet("""
-            QTextEdit {
-                background: #0d1117;
-                color: #c9d1d9;
-                border: none;
-                border-radius: 0px;
-                font-family: 'Consolas', 'Monaco', monospace;
-                font-size: 11px;
-                padding: 8px;
-            }
-        """)
-        progress_layout.addWidget(self.bg_log_text, 1)
-        
-        progress_frame.layout().addLayout(progress_layout)
-        layout.addWidget(progress_frame, 1)
-        
-        # Initialize variables
-        self.bg_processing_stopped = False
-        self.bg_selected_files = []
-        self._bg_settings = {
-            'keep_original': self.settings.value("bg_keep_original", True, type=bool),
-            'high_quality': self.settings.value("bg_high_quality", True, type=bool),
-            'output_format': self.settings.value("bg_output_format", "PNG", type=str),
-            'model': self.settings.value("bg_model", "u2net_human_seg", type=str),  # Default to human model
-            'subject_type': self.settings.value("bg_subject_type", "Person/Portrait", type=str),
-            'smooth_edges': self.settings.value("bg_smooth_edges", True, type=bool),
-            'feather_edges': self.settings.value("bg_feather_edges", False, type=bool),
-            'remove_noise': self.settings.value("bg_remove_noise", True, type=bool),
-            'protect_subject': self.settings.value("bg_protect_subject", True, type=bool)
-        }
-        
-        # Load saved output directory
-        saved_output_dir = self.settings.value("bg_output_dir", "downloads/no_background", type=str)
-        self.bg_output_dir.setText(saved_output_dir)
-        
-        # Connect output directory changes to save settings
-        self.bg_output_dir.textChanged.connect(self.save_bg_output_dir)
-        
-        return tab_widget
-    
-    def create_image_tools_tab(self):
-        """Create Image Tools tab with various image processing features"""
-        tab_widget = QWidget()
-        layout = QVBoxLayout(tab_widget)
-        layout.setSpacing(16)
-        layout.setContentsMargins(0, 0, 0, 0)
-        
-        # === INPUT SECTION ===
-        input_frame = self.create_section("Select Images")
-        input_layout = QVBoxLayout()
-        input_layout.setSpacing(12)
-        
-        # File selection row
-        file_row = QHBoxLayout()
-        
-        self.tools_input_display = QLineEdit()
-        self.tools_input_display.setPlaceholderText("No images selected...")
-        self.tools_input_display.setFixedHeight(44)
-        self.tools_input_display.setReadOnly(True)
-        self.style_input(self.tools_input_display)
-        file_row.addWidget(self.tools_input_display)
-        
-        browse_files_btn = QPushButton("Browse Files")
-        browse_files_btn.setFixedSize(100, 44)
-        browse_files_btn.clicked.connect(self.browse_tools_input_files)
-        self.style_btn_secondary(browse_files_btn)
-        file_row.addWidget(browse_files_btn)
-        
-        browse_folder_btn = QPushButton("Browse Folder")
-        browse_folder_btn.setFixedSize(110, 44)
-        browse_folder_btn.clicked.connect(self.browse_tools_input_folder)
-        self.style_btn_secondary(browse_folder_btn)
-        file_row.addWidget(browse_folder_btn)
-        
-        input_layout.addLayout(file_row)
-        input_frame.layout().addLayout(input_layout)
-        layout.addWidget(input_frame)
-        
-        # === TOOL SELECTION SECTION ===
-        tool_frame = self.create_section("Processing Tool")
-        tool_layout = QVBoxLayout()
-        tool_layout.setSpacing(12)
-        
-        tool_grid = QGridLayout()
-        tool_grid.setSpacing(16)
-        tool_grid.setColumnStretch(1, 1)
-        
-        # Tool selection
-        tool_grid.addWidget(self.create_label("Tool:"), 0, 0)
-        self.tools_operation = QComboBox()
-        self.tools_operation.addItems([
-            "Resize Images",
-            "Convert Format", 
-            "Compress Images",
-            "Add Watermark",
-            "Rotate Images",
-            "Create Thumbnails",
-            "Batch Rename"
-        ])
-        self.style_combo(self.tools_operation)
-        self.tools_operation.currentTextChanged.connect(self.on_tool_changed)
-        tool_grid.addWidget(self.tools_operation, 0, 1)
-        
-        tool_layout.addLayout(tool_grid)
-        
-        # Buttons row
-        btn_row = QHBoxLayout()
-        
-        self.tools_options_btn = QPushButton("Tool Options")
-        self.tools_options_btn.setFixedHeight(38)
-        self.tools_options_btn.setMinimumWidth(120)
-        self.tools_options_btn.clicked.connect(self.show_tools_options_dialog)
-        self.style_btn_green(self.tools_options_btn)
-        
-        self.tools_process_btn = QPushButton("Process Images")
-        self.tools_process_btn.setFixedHeight(38)
-        self.tools_process_btn.setMinimumWidth(140)
-        self.tools_process_btn.clicked.connect(self.process_image_tools)
-        self.style_btn_primary(self.tools_process_btn)
-        
-        self.tools_stop_btn = QPushButton("Stop")
-        self.tools_stop_btn.setFixedHeight(38)
-        self.tools_stop_btn.setMinimumWidth(80)
-        self.tools_stop_btn.setEnabled(False)
-        self.tools_stop_btn.clicked.connect(self.stop_tools_processing)
-        self.tools_stop_btn.setStyleSheet("""
-            QPushButton {
-                background: rgba(248, 81, 73, 0.8);
-                color: white;
-                border: none;
-                border-radius: 0px;
-                font-weight: bold;
-            }
-            QPushButton:hover { background: rgba(248, 81, 73, 1.0); }
-            QPushButton:disabled { background: #21262d; color: #484f58; }
-        """)
-        
-        btn_row.addStretch()
-        btn_row.addWidget(self.tools_options_btn)
-        btn_row.addSpacing(10)
-        btn_row.addWidget(self.tools_process_btn)
-        btn_row.addSpacing(10)
-        btn_row.addWidget(self.tools_stop_btn)
-        
-        tool_layout.addLayout(btn_row)
-        tool_frame.layout().addLayout(tool_layout)
-        layout.addWidget(tool_frame)
-        
-        # === OUTPUT SECTION ===
-        output_frame = self.create_section("Output Directory")
-        output_layout = QVBoxLayout()
-        output_layout.setSpacing(12)
-        
-        output_row = QHBoxLayout()
-        self.tools_output_dir = QLineEdit()
-        self.tools_output_dir.setText("downloads/processed_images")
-        self.tools_output_dir.setFixedHeight(44)
-        self.style_input(self.tools_output_dir)
-        output_row.addWidget(self.tools_output_dir)
-        
-        browse_output_btn = QPushButton("Browse")
-        browse_output_btn.setFixedSize(80, 44)
-        browse_output_btn.clicked.connect(self.browse_tools_output_dir)
-        self.style_btn_secondary(browse_output_btn)
-        output_row.addWidget(browse_output_btn)
-        
-        output_layout.addLayout(output_row)
-        output_frame.layout().addLayout(output_layout)
-        layout.addWidget(output_frame)
-        
-        # === PROGRESS SECTION ===
-        progress_frame = self.create_section("Progress")
-        progress_layout = QVBoxLayout()
-        progress_layout.setSpacing(8)
-        
-        # Status and progress
-        status_row = QHBoxLayout()
-        self.tools_status_label = QLabel("Ready to process images")
-        self.tools_status_label.setStyleSheet("color: #58a6ff; font-weight: bold; font-size: 12px;")
-        status_row.addWidget(self.tools_status_label)
-        status_row.addStretch()
-        
-        self.tools_file_count_label = QLabel("0 files selected")
-        self.tools_file_count_label.setStyleSheet("color: #7d8590; font-size: 11px;")
-        status_row.addWidget(self.tools_file_count_label)
-        
-        progress_layout.addLayout(status_row)
-        
-        self.tools_progress_bar = QProgressBar()
-        self.tools_progress_bar.setFixedHeight(18)
-        self.tools_progress_bar.setStyleSheet("""
-            QProgressBar {
-                background: #21262d;
-                border: none;
-                border-radius: 0px;
-                text-align: center;
-                color: #f0f6fc;
-                font-size: 10px;
-            }
-            QProgressBar::chunk {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #238636, stop:1 #2ea043);
-            }
-        """)
-        progress_layout.addWidget(self.tools_progress_bar)
-        
-        # Log text
-        self.tools_log_text = QTextEdit()
-        self.tools_log_text.setReadOnly(True)
-        self.tools_log_text.setPlaceholderText("Processing log will appear here...")
-        self.tools_log_text.setStyleSheet("""
-            QTextEdit {
-                background: #0d1117;
-                color: #c9d1d9;
-                border: none;
-                border-radius: 0px;
-                font-family: 'Consolas', 'Monaco', monospace;
-                font-size: 11px;
-                padding: 8px;
-            }
-        """)
-        progress_layout.addWidget(self.tools_log_text, 1)
-        
-        progress_frame.layout().addLayout(progress_layout)
-        layout.addWidget(progress_frame, 1)
-        
-        # Initialize variables
-        self.tools_processing_stopped = False
-        self.tools_selected_files = []
-        self._tools_settings = {
-            'resize_width': 800,
-            'resize_height': 600,
-            'maintain_aspect': True,
-            'convert_format': 'PNG',
-            'compress_quality': 85,
-            'watermark_text': '',
-            'rotate_angle': 90,
-            'thumb_size': 150,
-            'rename_pattern': 'image_{number}'
-        }
         
         return tab_widget
     
@@ -7956,11 +6595,6 @@ class MainWindow(QMainWindow):
         self.multi_progress_dialog.show()
         
         # Start multiple download worker
-        # Clear any previous stop flags
-        if hasattr(self.dl, '_stop_requested'):
-            delattr(self.dl, '_stop_requested')
-        self.dl.abort_download = False
-        
         self.multi_worker = MultipleDownloadWorker(self.dl, selected_urls, settings)
         self.multi_worker.progress.connect(self.multi_log)
         # Remove the current progress connection since we simplified it
@@ -8049,11 +6683,6 @@ class MainWindow(QMainWindow):
         """Stop multiple downloads"""
         if self.multi_worker:
             self.multi_worker.stop()
-            
-            # Give immediate feedback to user
-            self.multi_log("[STOP] Stop requested - current download will finish, then stop")
-            self.update_multi_status("Stopping...")
-            
             # Force terminate if still running after a short wait
             if self.multi_worker.isRunning():
                 self.multi_worker.terminate()
@@ -8064,16 +6693,6 @@ class MainWindow(QMainWindow):
             self.multi_download_btn.setEnabled(True)
             self.multi_pause_btn.setEnabled(False)
             self.multi_stop_btn.setEnabled(False)
-    
-    def handle_multi_dialog_cancel(self):
-        """Handle cancel button click in multiple download dialog"""
-        # Log the action for debugging
-        self.multi_log("[DIALOG] Stop button clicked in dialog")
-        # Call our stop function
-        self.stop_multiple_downloads()
-        # Mark dialog as cancelled
-        if hasattr(self, 'multi_progress_dialog') and self.multi_progress_dialog:
-            self.multi_progress_dialog.cancelled = True
     
     def handle_multi_progress_dialog_close(self, result):
         """Handle when multiple progress dialog is closed"""
@@ -8945,127 +7564,6 @@ class MainWindow(QMainWindow):
         videos = settings['videos']
         max_videos = settings['max_videos']
         
-        # Apply comprehensive filtering
-        original_count = len(videos)
-        filtered_videos = []
-        filter_stats = {
-            'views_low': 0, 'views_high': 0,
-            'likes_low': 0, 'likes_high': 0,
-            'comments_low': 0, 'comments_high': 0,
-            'shares_low': 0, 'shares_high': 0,
-            'duration_short': 0, 'duration_long': 0,
-            'not_verified': 0, 'not_trending': 0
-        }
-        
-        self.log(f"[Filter] Starting comprehensive filtering - Original videos: {original_count}")
-        
-        for video in videos:
-            # Extract video metrics (with fallbacks for different platforms)
-            view_count = video.get('view_count', 0)
-            like_count = video.get('like_count', video.get('likes', 0))
-            comment_count = video.get('comment_count', video.get('comments', 0))
-            share_count = video.get('share_count', video.get('shares', video.get('repost_count', 0)))
-            duration = video.get('duration', 0)
-            is_verified = video.get('uploader_verified', video.get('verified', False))
-            is_trending = video.get('trending', video.get('is_trending', False))
-            
-            # Apply engagement filters
-            if settings.get('min_views') is not None and view_count < settings['min_views']:
-                filter_stats['views_low'] += 1
-                continue
-            if settings.get('max_views') is not None and view_count > settings['max_views']:
-                filter_stats['views_high'] += 1
-                continue
-            
-            if settings.get('min_likes') is not None and like_count < settings['min_likes']:
-                filter_stats['likes_low'] += 1
-                continue
-            if settings.get('max_likes') is not None and like_count > settings['max_likes']:
-                filter_stats['likes_high'] += 1
-                continue
-            
-            if settings.get('min_comments') is not None and comment_count < settings['min_comments']:
-                filter_stats['comments_low'] += 1
-                continue
-            if settings.get('max_comments') is not None and comment_count > settings['max_comments']:
-                filter_stats['comments_high'] += 1
-                continue
-            
-            if settings.get('min_shares') is not None and share_count < settings['min_shares']:
-                filter_stats['shares_low'] += 1
-                continue
-            if settings.get('max_shares') is not None and share_count > settings['max_shares']:
-                filter_stats['shares_high'] += 1
-                continue
-            
-            # Apply content filters
-            if settings.get('min_duration') is not None and duration < settings['min_duration']:
-                filter_stats['duration_short'] += 1
-                continue
-            if settings.get('max_duration') is not None and duration > settings['max_duration']:
-                filter_stats['duration_long'] += 1
-                continue
-            
-            # Apply advanced filters
-            if settings.get('filter_verified') and not is_verified:
-                filter_stats['not_verified'] += 1
-                continue
-            
-            if settings.get('filter_trending') and not is_trending:
-                filter_stats['not_trending'] += 1
-                continue
-            
-            # Apply duration-based exclusions
-            if settings.get('exclude_shorts') and duration > 0 and duration < 60:
-                filter_stats['duration_short'] += 1
-                continue
-            
-            if settings.get('exclude_long') and duration > 600:  # 10 minutes
-                filter_stats['duration_long'] += 1
-                continue
-            
-            # Video passed all filters
-            filtered_videos.append(video)
-        
-        videos = filtered_videos
-        
-        # Log comprehensive filtering results
-        total_filtered = sum(filter_stats.values())
-        if total_filtered > 0:
-            self.log(f"[Filter] Applied comprehensive filters:")
-            
-            # Log engagement filters
-            if filter_stats['views_low'] + filter_stats['views_high'] > 0:
-                self.log(f"  Views: -{filter_stats['views_low']} low, -{filter_stats['views_high']} high")
-            if filter_stats['likes_low'] + filter_stats['likes_high'] > 0:
-                self.log(f"  Likes: -{filter_stats['likes_low']} low, -{filter_stats['likes_high']} high")
-            if filter_stats['comments_low'] + filter_stats['comments_high'] > 0:
-                self.log(f"  Comments: -{filter_stats['comments_low']} low, -{filter_stats['comments_high']} high")
-            if filter_stats['shares_low'] + filter_stats['shares_high'] > 0:
-                self.log(f"  Shares: -{filter_stats['shares_low']} low, -{filter_stats['shares_high']} high")
-            
-            # Log content filters
-            if filter_stats['duration_short'] + filter_stats['duration_long'] > 0:
-                self.log(f"  Duration: -{filter_stats['duration_short']} short, -{filter_stats['duration_long']} long")
-            
-            # Log advanced filters
-            if filter_stats['not_verified'] > 0:
-                self.log(f"  Verification: -{filter_stats['not_verified']} unverified")
-            if filter_stats['not_trending'] > 0:
-                self.log(f"  Trending: -{filter_stats['not_trending']} non-trending")
-            
-            self.log(f"[Filter] Result: {original_count} videos -> {len(videos)} match all criteria")
-            
-            if not videos:
-                QMessageBox.warning(self, "No Videos Match Filters", 
-                                  f"No videos found matching the filter criteria.\n\n"
-                                  f"Original videos: {original_count}\n"
-                                  f"Total filtered out: {total_filtered}\n"
-                                  f"Remaining videos: 0")
-                return
-        else:
-            self.log("[Filter] No filters applied, proceeding with all videos")
-        
         # Pass more videos than requested to account for failures
         # The downloader will stop when it reaches the target successful downloads
         if max_videos:
@@ -9084,19 +7582,8 @@ class MainWindow(QMainWindow):
         self.log(f"[!] Starting download of up to {max_videos if max_videos else len(video_urls)} videos from profile: {profile_data.get('profile_name', 'Unknown')}")
         self.log(f"   (Prepared {len(video_urls)} URLs to handle potential failures)")
         
-        # Create download settings from the settings parameter
-        download_settings = {
-            'quality': settings.get('quality', 'best'),
-            'audio': settings.get('audio', False),
-            'subtitle': settings.get('subtitle', False),
-            'format': settings.get('format', 'Force H.264 (Compatible)'),
-            'convert': False,
-            'use_caption': True,
-            'mute': settings.get('mute', False)
-        }
-        
-        # Use the existing multiple download functionality with target count and custom settings
-        self.start_multiple_download_with_urls(video_urls, target_success=max_videos, custom_settings=download_settings)
+        # Use the existing multiple download functionality with target count
+        self.start_multiple_download_with_urls(video_urls, target_success=max_videos)
     
     def get_profile_info_from_tab(self):
         """Get profile info from the profile tab"""
@@ -9288,21 +7775,6 @@ class MainWindow(QMainWindow):
                 # Create single progress dialog for all profiles
                 self.profile_multi_dialog = MultipleProgressDialog(self, total_videos)
                 self.profile_multi_dialog.setWindowTitle(f"Downloading from {len(self.all_profile_data)} Profiles")
-                
-                # CRITICAL FIX: Connect dialog buttons to stop handlers
-                try:
-                    self.profile_multi_dialog.pause_btn.clicked.disconnect()
-                except:
-                    pass
-                try:
-                    self.profile_multi_dialog.cancel_btn.clicked.disconnect()
-                except:
-                    pass
-                
-                # Connect to our stop handlers
-                self.profile_multi_dialog.pause_btn.clicked.connect(self.pause_profile_downloads)
-                self.profile_multi_dialog.cancel_btn.clicked.connect(self.handle_profile_dialog_cancel)
-                
                 self.profile_multi_dialog.show()
                 
                 # Start downloading profiles one by one
@@ -9391,11 +7863,6 @@ class MainWindow(QMainWindow):
             self.profile_multi_dialog.video_status_label.setText(f"Starting {profile_name}...")
         
         # Start download worker
-        # Clear any previous stop flags
-        if hasattr(self.dl, '_stop_requested'):
-            delattr(self.dl, '_stop_requested')
-        self.dl.abort_download = False
-        
         self.profile_multi_worker = MultipleDownloadWorker(self.dl, video_urls, download_settings)
         self.profile_multi_worker.progress.connect(lambda msg: self.profile_progress_text.append(msg))
         self.profile_multi_worker.video_started.connect(self.on_profile_video_started)
@@ -9582,129 +8049,12 @@ class MainWindow(QMainWindow):
             profile_name = data.get('profile_name', 'Unknown')
             videos = data.get('videos', [])
             
-            # Get all filter settings
+            # Get max videos setting
             settings = self.get_profile_download_settings()
             max_videos = settings.get('max_videos', 50)
             
-            # Apply comprehensive filtering
-            original_count = len(videos)
-            filtered_videos = []
-            filter_stats = {
-                'views_low': 0, 'views_high': 0,
-                'likes_low': 0, 'likes_high': 0,
-                'comments_low': 0, 'comments_high': 0,
-                'shares_low': 0, 'shares_high': 0,
-                'duration_short': 0, 'duration_long': 0,
-                'not_verified': 0, 'not_trending': 0
-            }
-            
-            for video in videos:
-                # Extract video metrics (with fallbacks for different platforms)
-                view_count = video.get('view_count', 0)
-                like_count = video.get('like_count', video.get('likes', 0))
-                comment_count = video.get('comment_count', video.get('comments', 0))
-                share_count = video.get('share_count', video.get('shares', video.get('repost_count', 0)))
-                duration = video.get('duration', 0)
-                is_verified = video.get('uploader_verified', video.get('verified', False))
-                is_trending = video.get('trending', video.get('is_trending', False))
-                
-                # Apply engagement filters
-                if settings.get('min_views') is not None and view_count < settings['min_views']:
-                    filter_stats['views_low'] += 1
-                    continue
-                if settings.get('max_views') is not None and view_count > settings['max_views']:
-                    filter_stats['views_high'] += 1
-                    continue
-                
-                if settings.get('min_likes') is not None and like_count < settings['min_likes']:
-                    filter_stats['likes_low'] += 1
-                    continue
-                if settings.get('max_likes') is not None and like_count > settings['max_likes']:
-                    filter_stats['likes_high'] += 1
-                    continue
-                
-                if settings.get('min_comments') is not None and comment_count < settings['min_comments']:
-                    filter_stats['comments_low'] += 1
-                    continue
-                if settings.get('max_comments') is not None and comment_count > settings['max_comments']:
-                    filter_stats['comments_high'] += 1
-                    continue
-                
-                if settings.get('min_shares') is not None and share_count < settings['min_shares']:
-                    filter_stats['shares_low'] += 1
-                    continue
-                if settings.get('max_shares') is not None and share_count > settings['max_shares']:
-                    filter_stats['shares_high'] += 1
-                    continue
-                
-                # Apply content filters
-                if settings.get('min_duration') is not None and duration < settings['min_duration']:
-                    filter_stats['duration_short'] += 1
-                    continue
-                if settings.get('max_duration') is not None and duration > settings['max_duration']:
-                    filter_stats['duration_long'] += 1
-                    continue
-                
-                # Apply advanced filters
-                if settings.get('filter_verified') and not is_verified:
-                    filter_stats['not_verified'] += 1
-                    continue
-                
-                if settings.get('filter_trending') and not is_trending:
-                    filter_stats['not_trending'] += 1
-                    continue
-                
-                # Apply duration-based exclusions
-                if settings.get('exclude_shorts') and duration > 0 and duration < 60:
-                    filter_stats['duration_short'] += 1
-                    continue
-                
-                if settings.get('exclude_long') and duration > 600:  # 10 minutes
-                    filter_stats['duration_long'] += 1
-                    continue
-                
-                # Video passed all filters
-                filtered_videos.append(video)
-            
-            videos = filtered_videos
-            
-            # Log comprehensive filtering results
-            total_filtered = sum(filter_stats.values())
-            if total_filtered > 0:
-                self.profile_videos_text.append(f"   [Filter] Applied filters to {profile_name}:")
-                
-                # Log engagement filters
-                if filter_stats['views_low'] + filter_stats['views_high'] > 0:
-                    self.profile_videos_text.append(f"     Views: -{filter_stats['views_low']} low, -{filter_stats['views_high']} high")
-                if filter_stats['likes_low'] + filter_stats['likes_high'] > 0:
-                    self.profile_videos_text.append(f"     Likes: -{filter_stats['likes_low']} low, -{filter_stats['likes_high']} high")
-                if filter_stats['comments_low'] + filter_stats['comments_high'] > 0:
-                    self.profile_videos_text.append(f"     Comments: -{filter_stats['comments_low']} low, -{filter_stats['comments_high']} high")
-                if filter_stats['shares_low'] + filter_stats['shares_high'] > 0:
-                    self.profile_videos_text.append(f"     Shares: -{filter_stats['shares_low']} low, -{filter_stats['shares_high']} high")
-                
-                # Log content filters
-                if filter_stats['duration_short'] + filter_stats['duration_long'] > 0:
-                    self.profile_videos_text.append(f"     Duration: -{filter_stats['duration_short']} short, -{filter_stats['duration_long']} long")
-                
-                # Log advanced filters
-                if filter_stats['not_verified'] > 0:
-                    self.profile_videos_text.append(f"     Verification: -{filter_stats['not_verified']} unverified")
-                if filter_stats['not_trending'] > 0:
-                    self.profile_videos_text.append(f"     Trending: -{filter_stats['not_trending']} non-trending")
-                
-                self.profile_videos_text.append(f"   [Filter] {profile_name}: {original_count} videos -> {len(videos)} match all criteria")
-                
-                if not videos:
-                    self.profile_videos_text.append(f"   [X] {profile_name}: No videos match filter criteria")
-                    # Process next profile even if this one has no matching videos
-                    self.current_profile_index += 1
-                    self.process_next_profile()
-                    return
-            
-            # Limit videos per profile (after filtering)
+            # Limit videos per profile
             if max_videos and len(videos) > max_videos:
-                videos = videos[:max_videos]
                 videos = videos[:max_videos]
             
             # Extract URLs
@@ -9775,60 +8125,6 @@ class MainWindow(QMainWindow):
         """Start downloading videos from profile with custom settings"""
         videos = profile_data.get('videos', [])
         max_videos = settings['max_videos']
-        min_views = settings.get('min_views')
-        max_views = settings.get('max_views')
-        
-        # Filter videos by view count if specified
-        original_count = len(videos)
-        self.profile_videos_text.append(f"[DEBUG] Starting view count filtering - Original videos: {original_count}")
-        self.profile_videos_text.append(f"[DEBUG] Min views setting: {min_views}, Max views setting: {max_views}")
-        
-        if min_views is not None or max_views is not None:
-            filtered_videos = []
-            skipped_low = 0
-            skipped_high = 0
-            
-            # Debug: Show first 5 videos' view counts
-            self.profile_videos_text.append("[DEBUG] Sample video view counts:")
-            for i, video in enumerate(videos[:5]):
-                view_count = video.get('view_count', 0)
-                title = video.get('title', 'Unknown')[:30]
-                self.profile_videos_text.append(f"  Video {i+1}: '{title}...' - {view_count:,} views")
-            
-            for video in videos:
-                view_count = video.get('view_count', 0)
-                
-                # Skip if below minimum views
-                if min_views is not None and view_count < min_views:
-                    skipped_low += 1
-                    continue
-                
-                # Skip if above maximum views
-                if max_views is not None and view_count > max_views:
-                    skipped_high += 1
-                    continue
-                
-                filtered_videos.append(video)
-            
-            videos = filtered_videos
-            filtered_count = len(videos)
-            
-            # Log filtering results
-            if min_views is not None and max_views is not None:
-                self.profile_videos_text.append(f"[Filter] View count filter: {min_views:,} - {max_views:,} views")
-            elif min_views is not None:
-                self.profile_videos_text.append(f"[Filter] View count filter: minimum {min_views:,} views")
-            elif max_views is not None:
-                self.profile_videos_text.append(f"[Filter] View count filter: maximum {max_views:,} views")
-            
-            self.profile_videos_text.append(f"[Filter] Skipped {skipped_low} videos (too few views), {skipped_high} videos (too many views)")
-            self.profile_videos_text.append(f"[Filter] Filtered {original_count} videos -> {filtered_count} videos match criteria")
-            
-            if not videos:
-                self.profile_videos_text.append("[X] No videos found matching the view count criteria")
-                return
-        else:
-            self.profile_videos_text.append("[DEBUG] No view count filters set, proceeding with all videos")
         
         # Apply 3x buffer to account for Facebook's high failure rate
         # The downloader will stop when it reaches the target successful downloads
@@ -9884,11 +8180,6 @@ class MainWindow(QMainWindow):
         self.profile_multi_progress_dialog.show()
         
         # Start multiple download worker for profile
-        # Clear any previous stop flags
-        if hasattr(self.dl, '_stop_requested'):
-            delattr(self.dl, '_stop_requested')
-        self.dl.abort_download = False
-        
         self.profile_multi_worker = MultipleDownloadWorker(self.dl, video_urls, download_settings)
         self.profile_multi_worker.progress.connect(self.profile_progress_log)
         self.profile_multi_worker.video_started.connect(self.on_profile_video_started)
@@ -9896,19 +8187,10 @@ class MainWindow(QMainWindow):
         self.profile_multi_worker.batch_completed.connect(self.on_profile_batch_completed)
         
         # Connect dialog controls to worker
-        # Disconnect all existing connections to avoid conflicts
-        try:
-            self.profile_multi_progress_dialog.pause_btn.clicked.disconnect()
-        except:
-            pass
-        try:
-            self.profile_multi_progress_dialog.cancel_btn.clicked.disconnect()
-        except:
-            pass
-        
-        # Connect to our custom handlers
+        self.profile_multi_progress_dialog.pause_btn.clicked.disconnect()
+        self.profile_multi_progress_dialog.cancel_btn.clicked.disconnect()
         self.profile_multi_progress_dialog.pause_btn.clicked.connect(self.pause_profile_downloads)
-        self.profile_multi_progress_dialog.cancel_btn.clicked.connect(self.handle_profile_dialog_cancel)
+        self.profile_multi_progress_dialog.cancel_btn.clicked.connect(self.stop_profile_downloads)
         
         self.profile_multi_worker.start()
         self.profile_status_label.setText(f"Downloading {len(video_urls)} videos from profile...")
@@ -9959,99 +8241,27 @@ class MainWindow(QMainWindow):
                 self.profile_status_label.setText("Paused")
     
     def stop_profile_downloads(self):
-        """Stop profile downloads - AGGRESSIVE VERSION - handles both dialog types"""
-        self.profile_progress_log("[STOP] AGGRESSIVE STOP INITIATED")
-        
-        # Set all possible stop flags immediately
-        if hasattr(self, 'dl') and self.dl:
-            self.dl.abort_download = True
-            self.dl._stop_requested = True
-            self.profile_progress_log("[STOP] Set downloader abort flags")
-        
-        # Handle the main profile worker (newer method)
+        """Stop profile downloads"""
         if hasattr(self, 'profile_multi_worker') and self.profile_multi_worker:
-            # Set all worker stop flags
             self.profile_multi_worker.stopped = True
-            self.profile_multi_worker._current_download_aborted = True
-            self.profile_multi_worker.paused = False  # Ensure not paused
-            
-            # Call worker stop method
             self.profile_multi_worker.stop()
-            self.profile_progress_log("[STOP] Called main profile worker stop method")
+            self.profile_status_label.setText("Stopping downloads...")
+            self.profile_log("[STOP] Stopping profile downloads...")
             
-            # Try to stop gracefully first (very short timeout)
-            if self.profile_multi_worker.isRunning():
-                self.profile_progress_log("[STOP] Main worker still running, waiting 1 second...")
-                self.profile_multi_worker.wait(1000)  # Only wait 1 second
+            # Give it a moment to stop gracefully
+            self.profile_multi_worker.wait(500)
             
             # Force terminate if still running
             if self.profile_multi_worker.isRunning():
-                self.profile_progress_log("[STOP] Force terminating main worker thread...")
+                self.profile_log("[!] Force stopping download thread...")
                 self.profile_multi_worker.terminate()
-                self.profile_multi_worker.wait(2000)  # Wait up to 2 seconds for termination
-                
-                if self.profile_multi_worker.isRunning():
-                    self.profile_progress_log("[ERROR] Main worker thread could not be terminated!")
-                else:
-                    self.profile_progress_log("[STOP] Main worker thread terminated successfully")
-            else:
-                self.profile_progress_log("[STOP] Main worker stopped gracefully")
-        
-        # Update status
-        if hasattr(self, 'profile_status_label'):
-            self.profile_status_label.setText("Downloads stopped")
-        
-        self.profile_progress_log("[STOP] Profile downloads stopped by user")
-        
-        # Re-enable buttons
-        if hasattr(self, 'profile_info_btn'):
-            self.profile_info_btn.setEnabled(True)
-        if hasattr(self, 'profile_download_btn'):
-            self.profile_download_btn.setEnabled(True)
+                self.profile_multi_worker.wait(1000)
             
-        # Close both types of progress dialogs
+            self.profile_status_label.setText("Downloads stopped")
+            self.profile_log("[STOP] Profile downloads stopped by user")
+            
         if hasattr(self, 'profile_multi_progress_dialog') and self.profile_multi_progress_dialog:
             self.profile_multi_progress_dialog.close()
-            self.profile_progress_log("[STOP] Progress dialog closed")
-            
-        if hasattr(self, 'profile_multi_dialog') and self.profile_multi_dialog:
-            self.profile_multi_dialog.close()
-            self.profile_progress_log("[STOP] Multi-profile dialog closed")
-    
-    def handle_profile_dialog_cancel(self):
-        """Handle cancel button click in profile download dialog - AGGRESSIVE STOP - handles both dialog types"""
-        # Log the action for debugging
-        self.profile_progress_log("[DIALOG] STOP BUTTON CLICKED - INITIATING IMMEDIATE STOP")
-        
-        # Set ALL possible stop flags immediately
-        if hasattr(self, 'profile_multi_worker') and self.profile_multi_worker:
-            self.profile_multi_worker.stopped = True
-            self.profile_multi_worker._current_download_aborted = True
-            
-        if hasattr(self, 'dl') and self.dl:
-            self.dl.abort_download = True
-            self.dl._stop_requested = True
-            
-        # Call our stop function
-        self.stop_profile_downloads()
-        
-        # Mark both types of dialogs as cancelled
-        if hasattr(self, 'profile_multi_progress_dialog') and self.profile_multi_progress_dialog:
-            self.profile_multi_progress_dialog.cancelled = True
-            
-        if hasattr(self, 'profile_multi_dialog') and self.profile_multi_dialog:
-            self.profile_multi_dialog.cancelled = True
-            
-        # Additional immediate feedback
-        self.profile_progress_log("[STOP] All stop flags set - downloads should stop immediately")
-        
-        # Force update the UI
-        if hasattr(self, 'profile_status_label'):
-            self.profile_status_label.setText("STOPPING - Please wait...")
-            
-        # Process events to ensure UI updates
-        from PyQt6.QtWidgets import QApplication
-        QApplication.processEvents()
     
     def handle_profile_tab_result(self, success, data, progress_dialog):
         """Handle profile info result from profile tab"""
@@ -10111,32 +8321,27 @@ class MainWindow(QMainWindow):
             self.profile_videos_text.append(f"[X] Failed to get profile info:")
             self.profile_videos_text.append(f"Error: {error_msg}")
     
-    def start_multiple_download_with_urls(self, urls, target_success=None, custom_settings=None):
+    def start_multiple_download_with_urls(self, urls, target_success=None):
         """Start multiple downloads with a provided list of URLs
         
         Args:
             urls: List of URLs to download
             target_success: Optional target number of successful downloads. 
                            If set, will stop after reaching this many successes.
-            custom_settings: Optional custom settings dict to use instead of UI settings
         """
         if not urls:
             return
         
-        # Set up download settings (use custom settings if provided, otherwise use current UI settings)
-        if custom_settings:
-            settings = custom_settings.copy()
-            settings['target_success'] = target_success  # Add target to custom settings
-        else:
-            settings = {
-                'quality': self.multi_quality.currentText(),
-                'audio': self.multi_audio_cb.isChecked(),
-                'subtitle': self.multi_subtitle_cb.isChecked(),
-                'format': self.multi_format.currentText(),
-                'convert': False,
-                'use_caption': True,
-                'target_success': target_success  # Pass target to worker
-            }
+        # Set up download settings (use current settings from UI)
+        settings = {
+            'quality': self.multi_quality.currentText(),
+            'audio': self.multi_audio_cb.isChecked(),
+            'subtitle': self.multi_subtitle_cb.isChecked(),
+            'format': self.multi_format.currentText(),
+            'convert': False,
+            'use_caption': True,
+            'target_success': target_success  # Pass target to worker
+        }
         
         # Set output directory
         self.dl.output_dir = Path(self.multi_output.text() or "downloads")
@@ -10148,11 +8353,6 @@ class MainWindow(QMainWindow):
         self.multi_progress_dialog.show()
         
         # Start multiple download worker
-        # Clear any previous stop flags
-        if hasattr(self.dl, '_stop_requested'):
-            delattr(self.dl, '_stop_requested')
-        self.dl.abort_download = False
-        
         self.multi_worker = MultipleDownloadWorker(self.dl, urls, settings)
         self.multi_worker.progress.connect(self.multi_log)
         self.multi_worker.video_started.connect(self.on_multi_video_started)
@@ -10160,19 +8360,10 @@ class MainWindow(QMainWindow):
         self.multi_worker.batch_completed.connect(self.on_multi_batch_completed)
         
         # Connect dialog controls to worker
-        # Disconnect all existing connections to avoid conflicts
-        try:
-            self.multi_progress_dialog.pause_btn.clicked.disconnect()
-        except:
-            pass
-        try:
-            self.multi_progress_dialog.cancel_btn.clicked.disconnect()
-        except:
-            pass
-        
-        # Connect to our custom handlers
+        self.multi_progress_dialog.pause_btn.clicked.disconnect()  # Remove old connections
+        self.multi_progress_dialog.cancel_btn.clicked.disconnect()
         self.multi_progress_dialog.pause_btn.clicked.connect(self.pause_multiple_downloads)
-        self.multi_progress_dialog.cancel_btn.clicked.connect(self.handle_multi_dialog_cancel)
+        self.multi_progress_dialog.cancel_btn.clicked.connect(self.stop_multiple_downloads)
         
         self.multi_worker.start()
         status_msg = f"Downloading up to {target_success} videos..." if target_success else f"Downloading {len(urls)} videos..."
@@ -10188,29 +8379,6 @@ class MainWindow(QMainWindow):
         folder = QFileDialog.getExistingDirectory(self, "Select Profile Download Directory")
         if folder:
             self.profile_output.setText(folder)
-    
-    def show_profile_download_settings(self):
-        """Show profile download settings using the existing ProfileDownloadDialog"""
-        # Create a mock profile info for the settings dialog
-        mock_profile_info = {
-            'profile_name': 'Download Settings',
-            'platform': 'Configuration',
-            'total_found': 0,
-            'videos': []
-        }
-        
-        # Create and show the settings dialog
-        settings_dialog = ProfileDownloadDialog(self, mock_profile_info)
-        settings_dialog.setWindowTitle("Profile Download Settings")
-        
-        if settings_dialog.exec() == QDialog.DialogCode.Accepted:
-            settings = settings_dialog.get_download_settings()
-            # Store settings for later use when downloading
-            self._profile_download_settings = settings
-            
-            # Show confirmation
-            max_videos_text = "All available" if settings.get('max_videos') is None else str(settings.get('max_videos'))
-            self.log(f"[S] Profile settings configured: {max_videos_text} videos, {settings.get('sort_order', 'newest first')}")
     
     # === VIDEO EDIT METHODS ===
     
@@ -10345,7 +8513,7 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(25, 25, 25, 25)
         
         # Header with icon
-        header = QLabel("[!] FFmpeg Required")
+        header = QLabel("⚠️ FFmpeg Required")
         header.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
         header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(header)
@@ -10367,7 +8535,7 @@ class MainWindow(QMainWindow):
             "Step 3: Extract the zip file to C:\\ffmpeg\n\n"
             "Step 4: Add FFmpeg to Windows PATH:\n"
             "   • Press Win+R, type 'sysdm.cpl' and press Enter\n"
-            "   • Click 'Advanced' tab -> 'Environment Variables'\n"
+            "   • Click 'Advanced' tab → 'Environment Variables'\n"
             "   • Under 'System variables', find 'Path' and click 'Edit'\n"
             "   • Click 'New' and add: C:\\ffmpeg\\bin\n"
             "   • Click OK on all windows\n\n"
@@ -11108,7 +9276,7 @@ class MainWindow(QMainWindow):
         QApplication.processEvents()
     
     def download_images(self):
-        """Download images from URL list - ULTRA SIMPLE VERSION"""
+        """Download images from URL list"""
         if not IMAGE_DOWNLOADER_AVAILABLE:
             QMessageBox.warning(self, "Error", 
                 "Image downloader module not available.\n\n"
@@ -11127,41 +9295,21 @@ class MainWindow(QMainWindow):
         # Reset stop flag
         self.image_download_stopped = False
         
+        # Create modern progress dialog
+        progress_dialog = ImageDownloadProgressDialog(self, len(urls))
+        progress_dialog.show()
+        
         # Setup UI
         self.image_progress_text.clear()
         self.image_progress_bar.setValue(0)
         self.image_progress_bar.setMaximum(len(urls))
-        self.image_status_label.setText(f"Starting download of {len(urls)} images...")
-        self.image_stats_label.setText("0 saved | 0 failed")
+        self.image_status_label.setText(f"Downloading {len(urls)} images...")
+        self.image_stats_label.setText("")
         self.image_download_btn.setEnabled(False)
         self.image_stop_btn.setEnabled(True)
         
-        # Log start
-        self.image_log(f"=== Starting download of {len(urls)} images ===")
-        self.image_log(f"Output directory: {output_dir}")
-        
-        # Check for Pinterest search URLs and warn user
-        pinterest_search_urls = [url for url in urls if 'pinterest.com' in url and ('/search/' in url or 'q=' in url)]
-        if pinterest_search_urls:
-            reply = QMessageBox.question(
-                self, 
-                "Pinterest Search URLs Detected",
-                f"Found {len(pinterest_search_urls)} Pinterest search URLs.\n\n"
-                f"These may take longer and could cause the interface to become temporarily unresponsive while the browser loads images.\n\n"
-                f"Continue with download?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-            )
-            if reply == QMessageBox.StandardButton.No:
-                self.image_download_btn.setEnabled(True)
-                self.image_stop_btn.setEnabled(False)
-                return
-            
-            self.image_log(f"⚠️ Warning: {len(pinterest_search_urls)} Pinterest search URLs detected")
-            self.image_log("   Interface may become temporarily unresponsive during browser operations")
-        
-        # SIMPLE SYNCHRONOUS APPROACH - NO THREADING AT ALL
+        # Create downloader
         try:
-            from image_downloader import ImageDownloader
             downloader = ImageDownloader(output_dir)
             
             successful = 0
@@ -11169,26 +9317,18 @@ class MainWindow(QMainWindow):
             skipped = 0
             
             for i, url in enumerate(urls, 1):
-                if self.image_download_stopped:
+                if self.image_download_stopped or progress_dialog.cancelled:
                     self.image_log("Stopped by user")
                     break
                 
-                # Update progress immediately
+                # Update progress dialog
+                progress_dialog.update_progress(i, url, successful, failed)
+                
+                # Update progress
                 self.image_progress_bar.setValue(i)
-                self.image_status_label.setText(f"Downloading {i}/{len(urls)}...")
                 self.image_stats_label.setText(f"{successful} saved | {failed} failed")
-                
-                # Log current download
-                self.image_log(f"[{i}/{len(urls)}] {url}")
-                
-                # Process events to keep UI responsive
+                self.image_status_label.setText(f"Downloading {i}/{len(urls)}...")
                 QApplication.processEvents()
-                
-                # Special handling for Pinterest search URLs
-                if 'pinterest.com' in url and ('/search/' in url or 'q=' in url):
-                    self.image_log("  🔍 Pinterest search URL - this may take a while...")
-                    self.image_log("  ⏳ Please wait while browser loads and scrolls...")
-                    QApplication.processEvents()
                 
                 # Determine subfolder by platform (use saved option)
                 subfolder = None
@@ -11197,15 +9337,12 @@ class MainWindow(QMainWindow):
                     if platform not in ['unknown', 'direct']:
                         subfolder = platform.capitalize()
                 
-                # Download with simple callback
-                def simple_callback(message):
-                    self.image_log(f"  {message}")
-                    QApplication.processEvents()
-                
+                # Download
+                self.image_log(f"[{i}/{len(urls)}] {url[:60]}...")
                 result = downloader.download_image(
                     url, 
                     subfolder=subfolder, 
-                    callback=simple_callback,
+                    callback=self.image_log,
                     pinterest_max=self._image_pinterest_max
                 )
                 
@@ -11214,167 +9351,25 @@ class MainWindow(QMainWindow):
                     if 'downloaded' in result:
                         successful += result.get('downloaded', 0)
                         failed += result.get('failed', 0)
-                        skipped += result.get('skipped', 0)
                         if result.get('message'):
-                            self.image_log(f"  {result['message']}")
+                            self.image_log(result['message'])
                     else:
                         # Single image result
                         # Check min size filter
                         file_size = result.get('size', 0)
                         if self._image_min_size > 0 and file_size < self._image_min_size * 1024:
                             skipped += 1
-                            self.image_log(f"  Skipped (too small): {file_size/1024:.1f}KB")
+                            self.image_log(f"Skipped (too small): {file_size/1024:.1f}KB")
                         elif result.get('skipped'):
                             skipped += 1
-                            reason = result.get('reason', 'Unknown')
-                            if reason == 'duplicate_hash':
-                                self.image_log(f"  ⏭ Skipped (duplicate content)")
-                            elif reason == 'duplicate_file':
-                                self.image_log(f"  ⏭ Skipped (file already exists)")
-                            else:
-                                self.image_log(f"  ⏭ Skipped: {reason}")
                         else:
                             successful += 1
-                            self.image_log(f"  ✅ Saved: {result.get('file_path', 'Unknown path')}")
                 else:
                     failed += 1
-                    error_msg = result.get('error', 'Unknown error')
-                    self.image_log(f"  ❌ Failed: {error_msg}")
                 
-                # Update stats
-                self.image_stats_label.setText(f"{successful} saved | {failed} failed | {skipped} skipped")
+                # Process events to keep UI responsive
                 QApplication.processEvents()
             
-            # Close downloader
-            downloader.close()
-            
-            # Final summary
-            self.image_log("")
-            self.image_log(f"=== Download Complete ===")
-            self.image_log(f"Total: {len(urls)} images")
-            self.image_log(f"Successful: {successful}")
-            self.image_log(f"Failed: {failed}")
-            self.image_log(f"Skipped: {skipped}")
-            
-            self.image_status_label.setText("Download complete")
-            self.image_progress_bar.setValue(len(urls))
-            
-            # Show completion message with Open Folder button (dark theme)
-            msg_box = QMessageBox(self)
-            msg_box.setWindowTitle("Download Complete")
-            msg_box.setText("Download finished!")
-            msg_box.setInformativeText(
-                f"Successful: {successful}\n"
-                f"Failed: {failed}\n"
-                f"Skipped: {skipped}\n\n"
-                f"Files saved to: {output_dir}"
-            )
-            msg_box.setIcon(QMessageBox.Icon.Information)
-            
-            # Apply dark theme styling
-            msg_box.setStyleSheet("""
-                QMessageBox {
-                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                        stop:0 #1a1d23, stop:1 #161b22);
-                    color: #f0f6fc;
-                    border: 2px solid #30363d;
-                    border-radius: 12px;
-                }
-                QMessageBox QLabel {
-                    color: #f0f6fc;
-                    font-size: 12px;
-                    border: none;
-                    background: transparent;
-                }
-                QMessageBox QPushButton {
-                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                        stop:0 #238636, stop:1 #2ea043);
-                    color: white;
-                    border: none;
-                    border-radius: 6px;
-                    font-size: 11px;
-                    font-weight: bold;
-                    padding: 8px 16px;
-                    min-width: 80px;
-                    margin: 2px;
-                }
-                QMessageBox QPushButton:hover {
-                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                        stop:0 #2ea043, stop:1 #238636);
-                }
-                QMessageBox QPushButton:pressed {
-                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                        stop:0 #1f6b2e, stop:1 #1a5c28);
-                }
-                QMessageBox QPushButton[text="Open Folder"] {
-                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                        stop:0 #58a6ff, stop:1 #4493f8);
-                }
-                QMessageBox QPushButton[text="Open Folder"]:hover {
-                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                        stop:0 #4493f8, stop:1 #3584e4);
-                }
-                QMessageBox QPushButton[text="Open Folder"]:pressed {
-                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                        stop:0 #2f74d0, stop:1 #2563c4);
-                }
-            """)
-            
-            # Add Open Folder button
-            open_folder_btn = msg_box.addButton("Open Folder", QMessageBox.ButtonRole.ActionRole)
-            ok_btn = msg_box.addButton(QMessageBox.StandardButton.Ok)
-            
-            msg_box.exec()
-            
-            # Check which button was clicked
-            if msg_box.clickedButton() == open_folder_btn:
-                # Open the output directory in file explorer
-                import subprocess
-                import os
-                try:
-                    # Convert to absolute path and resolve any short paths
-                    full_path = os.path.abspath(output_dir)
-                    
-                    if os.name == 'nt':  # Windows
-                        # Use os.startfile for Windows - more reliable than subprocess
-                        os.startfile(full_path)
-                    elif os.name == 'posix':  # macOS and Linux
-                        if sys.platform == 'darwin':  # macOS
-                            subprocess.run(['open', full_path], check=True)
-                        else:  # Linux
-                            subprocess.run(['xdg-open', full_path], check=True)
-                except Exception as e:
-                    QMessageBox.warning(self, "Error", f"Could not open folder:\n{str(e)}\n\nPath: {output_dir}")
-            
-        except Exception as e:
-            error_msg = str(e)
-            self.image_log(f"❌ ERROR: {error_msg}")
-            self.image_status_label.setText("Error occurred")
-            QMessageBox.critical(self, "Download Error", f"An error occurred:\n\n{error_msg}")
-        
-        finally:
-            self.image_download_btn.setEnabled(True)
-            self.image_stop_btn.setEnabled(False)
-
-    
-    def _update_image_progress(self, current, url, successful, failed, total):
-        """Update image download progress on main thread"""
-        try:
-            # Update progress dialog
-            if hasattr(self, '_current_progress_dialog') and self._current_progress_dialog:
-                self._current_progress_dialog.update_progress(current, url, successful, failed)
-            
-            # Update progress bar and labels
-            self.image_progress_bar.setValue(current)
-            self.image_stats_label.setText(f"{successful} saved | {failed} failed")
-            self.image_status_label.setText(f"Downloading {current}/{total}...")
-            
-        except Exception as e:
-            print(f"Error updating progress: {e}")
-    
-    def _handle_image_download_complete(self, successful, failed, skipped, output_dir, progress_dialog):
-        """Handle successful image download completion on main thread"""
-        try:
             # Close progress dialog
             progress_dialog.close()
             
@@ -11383,7 +9378,9 @@ class MainWindow(QMainWindow):
             self.image_log(f"Complete: {successful} saved, {failed} failed, {skipped} skipped")
             self.image_status_label.setText("Download complete")
             self.image_stats_label.setText(f"{successful} saved | {failed} failed | {skipped} skipped")
-            self.image_progress_bar.setValue(self.image_progress_bar.maximum())
+            self.image_progress_bar.setValue(len(urls))
+            
+            downloader.close()
             
             # Show modern finish dialog
             was_cancelled = self.image_download_stopped or progress_dialog.cancelled
@@ -11393,24 +9390,14 @@ class MainWindow(QMainWindow):
             complete_dialog.exec()
             
         except Exception as e:
-            self.image_log(f"Error processing results: {str(e)}")
+            progress_dialog.close()
+            self.image_log(f"Error: {str(e)}")
+            self.image_status_label.setText("Error occurred")
+            QMessageBox.critical(self, "Download Error", f"An error occurred during download:\n\n{str(e)}")
         
         finally:
             self.image_download_btn.setEnabled(True)
             self.image_stop_btn.setEnabled(False)
-            self._current_progress_dialog = None
-    
-    def _handle_image_download_error(self, error_msg, progress_dialog):
-        """Handle image download error on main thread"""
-        try:
-            progress_dialog.close()
-            self.image_log(f"Error: {error_msg}")
-            self.image_status_label.setText("Error occurred")
-            QMessageBox.critical(self, "Download Error", f"An error occurred during download:\n\n{error_msg}")
-        finally:
-            self.image_download_btn.setEnabled(True)
-            self.image_stop_btn.setEnabled(False)
-            self._current_progress_dialog = None
     
     def search_and_download_images(self):
         """Search for images and download them"""
@@ -11435,38 +9422,15 @@ class MainWindow(QMainWindow):
         self.image_status_label.setText(f"Searching for '{query}'...")
         self.image_search_btn.setEnabled(False)
         
-        # Run search in background thread to prevent UI freezing
-        def search_worker():
-            try:
-                downloader = ImageDownloader(output_dir)
-                
-                def thread_callback(message):
-                    # Use QTimer to safely update UI from thread
-                    QTimer.singleShot(0, lambda: self.image_log(message))
-                
-                thread_callback(f"[?] Searching {platform_text} for '{query}'...")
-                thread_callback(f"[G] Max images: {max_images}")
-                
-                result = downloader.search_and_download(query, platform, max_images, callback=thread_callback)
-                
-                # Close downloader
-                downloader.close()
-                
-                # Update UI on main thread
-                QTimer.singleShot(0, lambda: self._handle_search_result(result))
-                
-            except Exception as e:
-                error_msg = str(e)
-                QTimer.singleShot(0, lambda: self._handle_search_error(error_msg))
-        
-        # Start search in background thread
-        import threading
-        search_thread = threading.Thread(target=search_worker, daemon=True)
-        search_thread.start()
-    
-    def _handle_search_result(self, result):
-        """Handle search result on main thread"""
         try:
+            downloader = ImageDownloader(output_dir)
+            
+            self.image_log(f"[?] Searching {platform_text} for '{query}'...")
+            self.image_log(f"[G] Max images: {max_images}")
+            QApplication.processEvents()
+            
+            result = downloader.search_and_download(query, platform, max_images, callback=self.image_log)
+            
             if result.get('success', False) or result.get('successful', 0) > 0:
                 self.image_log("")
                 self.image_log(f"[OK] Search complete!")
@@ -11480,17 +9444,15 @@ class MainWindow(QMainWindow):
                     self.image_log("")
                     self.image_log("[*] Tip: Install Selenium for search feature:")
                     self.image_log("   pip install selenium webdriver-manager")
+            
+            downloader.close()
+            
         except Exception as e:
-            self.image_log(f"Error processing search results: {str(e)}")
+            self.image_log(f"[X] Error: {str(e)}")
+            self.image_status_label.setText("Error occurred")
         
         finally:
             self.image_search_btn.setEnabled(True)
-    
-    def _handle_search_error(self, error_msg):
-        """Handle search error on main thread"""
-        self.image_log(f"[X] Error: {error_msg}")
-        self.image_status_label.setText("Error occurred")
-        self.image_search_btn.setEnabled(True)
     
     def extract_images_from_page(self):
         """Extract all images from a webpage"""
@@ -11513,37 +9475,14 @@ class MainWindow(QMainWindow):
         self.image_status_label.setText("Extracting images from page...")
         self.image_extract_btn.setEnabled(False)
         
-        # Run extraction in background thread - simplified approach
-        def extract_worker():
-            try:
-                downloader = ImageDownloader()
-                
-                def thread_callback(message):
-                    # Use QTimer to safely update UI from thread
-                    QTimer.singleShot(0, lambda: self.image_log(message))
-                
-                thread_callback(f"[?] Scanning page: {page_url}")
-                
-                image_urls = downloader.extract_images_from_page(page_url, callback=thread_callback)
-                
-                # Close downloader to free resources
-                downloader.close()
-                
-                # Update UI on main thread
-                QTimer.singleShot(0, lambda: self._handle_extraction_result(image_urls, page_url))
-                
-            except Exception as e:
-                error_msg = str(e)
-                QTimer.singleShot(0, lambda: self._handle_extraction_error(error_msg))
-        
-        # Start extraction in background thread
-        import threading
-        extraction_thread = threading.Thread(target=extract_worker, daemon=True)
-        extraction_thread.start()
-    
-    def _handle_extraction_result(self, image_urls, page_url):
-        """Handle successful image extraction result on main thread"""
         try:
+            downloader = ImageDownloader()
+            
+            self.image_log(f"[?] Scanning page: {page_url}")
+            QApplication.processEvents()
+            
+            image_urls = downloader.extract_images_from_page(page_url, callback=self.image_log)
+            
             if image_urls:
                 self.image_log(f"[OK] Found {len(image_urls)} images")
                 self.image_log("")
@@ -11570,19 +9509,15 @@ class MainWindow(QMainWindow):
             else:
                 self.image_log("[X] No images found on page")
                 self.image_status_label.setText("No images found")
-                
+            
+            downloader.close()
+            
         except Exception as e:
-            self.image_log(f"[X] Error processing results: {str(e)}")
-            self.image_status_label.setText("Error processing results")
+            self.image_log(f"[X] Error: {str(e)}")
+            self.image_status_label.setText("Error occurred")
         
         finally:
             self.image_extract_btn.setEnabled(True)
-    
-    def _handle_extraction_error(self, error_msg):
-        """Handle extraction error on main thread"""
-        self.image_log(f"[X] Error: {error_msg}")
-        self.image_status_label.setText("Error occurred")
-        self.image_extract_btn.setEnabled(True)
     
     def style_spinbox(self, spinbox):
         """Style a spinbox widget"""
@@ -11625,278 +9560,28 @@ class MainWindow(QMainWindow):
         """)
     
     def get_profile_download_settings(self):
-        """Get profile download settings from stored dialog settings or QSettings"""
-        # Use stored settings from dialog if available, otherwise load from QSettings
-        if hasattr(self, '_profile_download_settings') and self._profile_download_settings:
-            stored_settings = self._profile_download_settings
-            max_videos = stored_settings.get('max_videos', 50)
-            sort_order = stored_settings.get('sort_order', 'Newest first')
-            quality = stored_settings.get('quality', 'best')
-            format_setting = stored_settings.get('format', 'mp4 (H.264)')
-            
-            # Engagement filters
-            min_views = stored_settings.get('min_views')
-            max_views = stored_settings.get('max_views')
-            min_likes = stored_settings.get('min_likes')
-            max_likes = stored_settings.get('max_likes')
-            min_comments = stored_settings.get('min_comments')
-            max_comments = stored_settings.get('max_comments')
-            min_shares = stored_settings.get('min_shares')
-            max_shares = stored_settings.get('max_shares')
-            
-            # Content filters
-            min_duration = stored_settings.get('min_duration')
-            max_duration = stored_settings.get('max_duration')
-            filter_verified = stored_settings.get('filter_verified', False)
-            filter_trending = stored_settings.get('filter_trending', False)
-            exclude_shorts = stored_settings.get('exclude_shorts', False)
-            exclude_long = stored_settings.get('exclude_long', False)
-            
-            # Download options
-            audio_only = stored_settings.get('audio_only', False)
-            subtitles = stored_settings.get('subtitles', False)
-            mute_video = stored_settings.get('mute_video', False)
-            create_subfolder = stored_settings.get('create_subfolder', True)
-        else:
-            # Load from QSettings if no dialog settings stored
-            settings = QSettings("VideoDownloader", "ProfileDownloadSettings")
-            
-            # Load dropdown selections
-            max_videos_text = settings.value("max_videos", "50")
-            sort_order = settings.value("sort_order", "Newest first")
-            quality = settings.value("quality", "best")
-            format_setting = settings.value("format", "mp4 (H.264)")
-            
-            # Parse max_videos from text
-            if max_videos_text.lower().startswith('all'):
-                max_videos = None  # All videos
-            else:
-                try:
-                    max_videos = int(max_videos_text)
-                except:
-                    max_videos = 50
-            
-            # Load engagement filter inputs
-            min_views_text = settings.value("min_views", "")
-            max_views_text = settings.value("max_views", "")
-            min_likes_text = settings.value("min_likes", "")
-            max_likes_text = settings.value("max_likes", "")
-            min_comments_text = settings.value("min_comments", "")
-            max_comments_text = settings.value("max_comments", "")
-            min_shares_text = settings.value("min_shares", "")
-            max_shares_text = settings.value("max_shares", "")
-            
-            # Parse engagement filters
-            min_views = self._parse_number_input(min_views_text) if min_views_text else None
-            max_views = self._parse_number_input(max_views_text) if max_views_text else None
-            min_likes = self._parse_number_input(min_likes_text) if min_likes_text else None
-            max_likes = self._parse_number_input(max_likes_text) if max_likes_text else None
-            min_comments = self._parse_number_input(min_comments_text) if min_comments_text else None
-            max_comments = self._parse_number_input(max_comments_text) if max_comments_text else None
-            min_shares = self._parse_number_input(min_shares_text) if min_shares_text else None
-            max_shares = self._parse_number_input(max_shares_text) if max_shares_text else None
-            
-            # Load content filter inputs
-            min_duration_text = settings.value("min_duration", "")
-            max_duration_text = settings.value("max_duration", "")
-            min_duration = int(min_duration_text) if min_duration_text.isdigit() else None
-            max_duration = int(max_duration_text) if max_duration_text.isdigit() else None
-            
-            # Load checkboxes
-            audio_only = settings.value("audio_only", False, type=bool)
-            subtitles = settings.value("subtitles", False, type=bool)
-            mute_video = settings.value("mute_video", False, type=bool)
-            create_subfolder = settings.value("create_subfolder", True, type=bool)
-            
-            # Load advanced filter checkboxes
-            filter_verified = settings.value("filter_verified", False, type=bool)
-            filter_trending = settings.value("filter_trending", False, type=bool)
-            exclude_shorts = settings.value("exclude_shorts", False, type=bool)
-            exclude_long = settings.value("exclude_long", False, type=bool)
+        """Get profile download settings from the UI"""
+        max_videos_text = self.profile_max_videos.currentText()
+        max_videos = None if max_videos_text == "All available" else int(max_videos_text)
         
-        # Determine output directory (always from the UI input)
+        # Determine output directory
         output_dir = self.profile_output.text().strip() or "downloads/profiles"
         
-        # Convert sort order to internal format
-        sort_internal = sort_order.lower().replace(' first', '')  # 'newest' or 'oldest'
-        
         return {
-            'quality': quality,
-            'audio': audio_only,
-            'subtitle': subtitles,
-            'format': format_setting,
+            'quality': self.profile_quality.currentText(),
+            'audio': self.profile_audio_cb.isChecked(),
+            'subtitle': self.profile_subtitle_cb.isChecked(),
+            'format': self.profile_format.currentText(),
             'convert': False,
-            'mute': mute_video,
+            'mute': self.profile_mute_cb.isChecked(),
             'max_videos': max_videos,
-            'sort_order': sort_internal,
+            'sort_order': 'newest',
             'output_dir': output_dir,
-            'create_subfolder': create_subfolder,
+            'create_subfolder': self.profile_create_subfolder_cb.isChecked(),
             'add_date': False,
             'add_index': False,
-            'skip_existing': True,
-            
-            # Engagement filters
-            'min_views': min_views,
-            'max_views': max_views,
-            'min_likes': min_likes,
-            'max_likes': max_likes,
-            'min_comments': min_comments,
-            'max_comments': max_comments,
-            'min_shares': min_shares,
-            'max_shares': max_shares,
-            
-            # Content filters
-            'min_duration': min_duration,
-            'max_duration': max_duration,
-            'filter_verified': filter_verified,
-            'filter_trending': filter_trending,
-            'exclude_shorts': exclude_shorts,
-            'exclude_long': exclude_long
+            'skip_existing': True
         }
-    
-    def _parse_number_input(self, text):
-        """Parse number input with K/M/B suffixes"""
-        if not text or not text.strip():
-            return None
-        
-        text = text.strip().upper()
-        
-        try:
-            # Handle suffixes
-            if text.endswith('K'):
-                return int(float(text[:-1]) * 1000)
-            elif text.endswith('M'):
-                return int(float(text[:-1]) * 1000000)
-            elif text.endswith('B'):
-                return int(float(text[:-1]) * 1000000000)
-            else:
-                return int(text)
-        except:
-            return None
-    
-    def _clean_tiktok_caption_for_filename(self, caption):
-        """Clean TikTok caption text for use as filename"""
-        if not caption:
-            return None
-        
-        # Remove common TikTok mentions that clutter filenames
-        import re
-        
-        # Remove mentions but keep hashtags
-        caption = re.sub(r'@\w+', '', caption)
-        
-        # Remove URLs
-        caption = re.sub(r'http[s]?://\S+', '', caption)
-        
-        # Remove extra whitespace and newlines
-        caption = re.sub(r'\s+', ' ', caption).strip()
-        
-        # Keep only alphanumeric, spaces, hyphens, hashtags
-        safe_caption = "".join(c for c in caption if c.isalnum() or c in (' ', '-', '#', '.')).strip()
-        
-        # Remove multiple consecutive spaces
-        safe_caption = re.sub(r' +', ' ', safe_caption)
-        
-        # Limit length to 80 characters
-        if len(safe_caption) > 80:
-            safe_caption = safe_caption[:80].rstrip(' ')
-        
-        # Ensure it's not empty and doesn't start/end with space
-        safe_caption = safe_caption.strip()
-        
-        return safe_caption if safe_caption else None
-    
-    def _load_profile_download_settings(self):
-        """Load profile download settings from QSettings on startup"""
-        try:
-            settings = QSettings("VideoDownloader", "ProfileDownloadSettings")
-            
-            # Check if any profile settings exist
-            if settings.value("max_videos"):
-                # Load settings and store them in _profile_download_settings
-                max_videos_text = settings.value("max_videos", "50")
-                sort_order = settings.value("sort_order", "Newest first")
-                quality = settings.value("quality", "best")
-                format_setting = settings.value("format", "mp4 (H.264)")
-                
-                # Parse max_videos from text
-                if max_videos_text.lower().startswith('all'):
-                    max_videos = None  # All videos
-                else:
-                    try:
-                        max_videos = int(max_videos_text)
-                    except:
-                        max_videos = 50
-                
-                # Load engagement filter inputs
-                min_views_text = settings.value("min_views", "")
-                max_views_text = settings.value("max_views", "")
-                min_likes_text = settings.value("min_likes", "")
-                max_likes_text = settings.value("max_likes", "")
-                min_comments_text = settings.value("min_comments", "")
-                max_comments_text = settings.value("max_comments", "")
-                min_shares_text = settings.value("min_shares", "")
-                max_shares_text = settings.value("max_shares", "")
-                
-                # Parse engagement filters
-                min_views = self._parse_number_input(min_views_text) if min_views_text else None
-                max_views = self._parse_number_input(max_views_text) if max_views_text else None
-                min_likes = self._parse_number_input(min_likes_text) if min_likes_text else None
-                max_likes = self._parse_number_input(max_likes_text) if max_likes_text else None
-                min_comments = self._parse_number_input(min_comments_text) if min_comments_text else None
-                max_comments = self._parse_number_input(max_comments_text) if max_comments_text else None
-                min_shares = self._parse_number_input(min_shares_text) if min_shares_text else None
-                max_shares = self._parse_number_input(max_shares_text) if max_shares_text else None
-                
-                # Load content filter inputs
-                min_duration_text = settings.value("min_duration", "")
-                max_duration_text = settings.value("max_duration", "")
-                min_duration = int(min_duration_text) if min_duration_text.isdigit() else None
-                max_duration = int(max_duration_text) if max_duration_text.isdigit() else None
-                
-                # Load checkboxes
-                audio_only = settings.value("audio_only", False, type=bool)
-                subtitles = settings.value("subtitles", False, type=bool)
-                mute_video = settings.value("mute_video", False, type=bool)
-                create_subfolder = settings.value("create_subfolder", True, type=bool)
-                
-                # Load advanced filter checkboxes
-                filter_verified = settings.value("filter_verified", False, type=bool)
-                filter_trending = settings.value("filter_trending", False, type=bool)
-                exclude_shorts = settings.value("exclude_shorts", False, type=bool)
-                exclude_long = settings.value("exclude_long", False, type=bool)
-                
-                # Store in _profile_download_settings for immediate use
-                self._profile_download_settings = {
-                    'max_videos': max_videos,
-                    'sort_order': sort_order,
-                    'quality': quality,
-                    'format': format_setting,
-                    'audio': audio_only,
-                    'subtitle': subtitles,
-                    'mute': mute_video,
-                    'create_subfolder': create_subfolder,
-                    'min_views': min_views,
-                    'max_views': max_views,
-                    'min_likes': min_likes,
-                    'max_likes': max_likes,
-                    'min_comments': min_comments,
-                    'max_comments': max_comments,
-                    'min_shares': min_shares,
-                    'max_shares': max_shares,
-                    'min_duration': min_duration,
-                    'max_duration': max_duration,
-                    'filter_verified': filter_verified,
-                    'filter_trending': filter_trending,
-                    'exclude_shorts': exclude_shorts,
-                    'exclude_long': exclude_long
-                }
-                
-                self.log(f"[S] Loaded profile settings: {max_videos_text} videos, {sort_order}")
-                
-        except Exception as e:
-            self.log(f"[!] Failed to load profile settings: {str(e)}")
-    
     
     def download(self):
         url = self.url_input.text().strip()
@@ -12169,9 +9854,6 @@ class MainWindow(QMainWindow):
             
             # Force sync settings to ensure they're properly loaded
             self.settings.sync()
-            
-            # Load profile download settings
-            self._load_profile_download_settings()
             
             # Log content - NOT persisted (starts fresh each session)
             # Explicitly remove any old log_content that might exist
@@ -12592,2396 +10274,8 @@ class MainWindow(QMainWindow):
             # Don't spam the log with auto-save errors
             pass
 
-    # Background Removal Methods
-    def browse_bg_input_files(self):
-        """Browse for input files for background removal"""
-        files, _ = QFileDialog.getOpenFileNames(
-            self, 
-            "Select Images", 
-            "", 
-            "Image Files (*.png *.jpg *.jpeg *.webp *.bmp *.tiff);;All Files (*)"
-        )
-        if files:
-            self.bg_selected_files.extend(files)
-            self.update_bg_file_list()
-
-    def browse_bg_input_folder(self):
-        """Browse for input folder for background removal"""
-        folder = QFileDialog.getExistingDirectory(self, "Select Folder with Images")
-        if folder:
-            import os
-            image_extensions = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tiff'}
-            files = []
-            for root, dirs, filenames in os.walk(folder):
-                for filename in filenames:
-                    if any(filename.lower().endswith(ext) for ext in image_extensions):
-                        files.append(os.path.join(root, filename))
-            
-            self.bg_selected_files.extend(files)
-            self.update_bg_file_list()
-
-    def clear_bg_file_list(self):
-        """Clear the background removal file list"""
-        self.bg_selected_files = []
-        self.update_bg_file_list()
-
-    def update_bg_file_list(self):
-        """Update the background removal file display"""
-        count = len(self.bg_selected_files)
-        if count == 0:
-            self.bg_input_display.setText("")
-            self.bg_input_display.setPlaceholderText("No images selected...")
-            self.bg_file_count_label.setText("0 files selected")
-        elif count == 1:
-            import os
-            self.bg_input_display.setText(os.path.basename(self.bg_selected_files[0]))
-            self.bg_file_count_label.setText("1 file selected")
-        else:
-            self.bg_input_display.setText(f"{count} images selected")
-            self.bg_file_count_label.setText(f"{count} files selected")
-
-    def browse_bg_output_dir(self):
-        """Browse for output directory for background removal"""
-        folder = QFileDialog.getExistingDirectory(self, "Select Output Directory")
-        if folder:
-            self.bg_output_dir.setText(folder)
-            # Save the output directory setting
-            self.settings.setValue("bg_output_dir", folder)
-            self.settings.sync()
-    
-    def save_bg_output_dir(self):
-        """Save background removal output directory setting"""
-        output_dir = self.bg_output_dir.text().strip()
-        if output_dir:
-            self.settings.setValue("bg_output_dir", output_dir)
-            self.settings.sync()
-    
-    def rgb_to_lab_vectorized(self, rgb_img):
-        """Vectorized RGB to LAB conversion for entire images"""
-        try:
-            # Normalize RGB to 0-1
-            rgb_norm = rgb_img / 255.0
-            
-            # Convert to XYZ (vectorized)
-            xyz = np.zeros_like(rgb_norm)
-            xyz[:, :, 0] = 0.412453 * rgb_norm[:, :, 0] + 0.357580 * rgb_norm[:, :, 1] + 0.180423 * rgb_norm[:, :, 2]
-            xyz[:, :, 1] = 0.212671 * rgb_norm[:, :, 0] + 0.715160 * rgb_norm[:, :, 1] + 0.072169 * rgb_norm[:, :, 2]
-            xyz[:, :, 2] = 0.019334 * rgb_norm[:, :, 0] + 0.119193 * rgb_norm[:, :, 1] + 0.950227 * rgb_norm[:, :, 2]
-            
-            # Normalize by D65 illuminant
-            xyz[:, :, 0] /= 0.95047
-            xyz[:, :, 1] /= 1.0
-            xyz[:, :, 2] /= 1.08883
-            
-            # Apply f function
-            def f_vectorized(t):
-                return np.where(t > 0.008856, np.power(t, 1/3), (7.787 * t) + (16/116))
-            
-            fx = f_vectorized(xyz[:, :, 0])
-            fy = f_vectorized(xyz[:, :, 1])
-            fz = f_vectorized(xyz[:, :, 2])
-            
-            # Calculate LAB
-            lab = np.zeros_like(rgb_norm)
-            lab[:, :, 0] = 116 * fy - 16  # L
-            lab[:, :, 1] = 500 * (fx - fy)  # a
-            lab[:, :, 2] = 200 * (fy - fz)  # b
-            
-            return lab
-        except:
-            # Fallback to RGB if conversion fails
-            return rgb_img
-    
-    def rgb_to_lab(self, rgb):
-        """Convert single RGB color to LAB color space"""
-        try:
-            # Normalize RGB to 0-1
-            rgb_norm = np.array(rgb) / 255.0
-            
-            # Convert to XYZ
-            def f(t):
-                return np.where(t > 0.008856, np.power(t, 1/3), (7.787 * t) + (16/116))
-            
-            xyz = np.array([
-                0.412453 * rgb_norm[0] + 0.357580 * rgb_norm[1] + 0.180423 * rgb_norm[2],
-                0.212671 * rgb_norm[0] + 0.715160 * rgb_norm[1] + 0.072169 * rgb_norm[2],
-                0.019334 * rgb_norm[0] + 0.119193 * rgb_norm[1] + 0.950227 * rgb_norm[2]
-            ])
-            
-            # Normalize by D65 illuminant
-            xyz_norm = xyz / np.array([0.95047, 1.0, 1.08883])
-            
-            fx, fy, fz = f(xyz_norm)
-            
-            L = 116 * fy - 16
-            a = 500 * (fx - fy)
-            b = 200 * (fy - fz)
-            
-            return np.array([L, a, b])
-        except:
-            # Fallback to RGB if conversion fails
-            return rgb
-    
-    def process_with_sam(self, image):
-        """Process image with SAM (Segment Anything Model)"""
-        try:
-            # Try to use SAM for automatic segmentation
-            import torch
-            from segment_anything import sam_model_registry, SamAutomaticMaskGenerator
-            
-            # Load SAM model (this would download on first use)
-            sam = sam_model_registry["vit_h"](checkpoint="sam_vit_h_4b8939.pth")
-            mask_generator = SamAutomaticMaskGenerator(sam)
-            
-            # Convert PIL to numpy
-            image_np = np.array(image)
-            
-            # Generate masks
-            masks = mask_generator.generate(image_np)
-            
-            # Find the best mask (largest, most central)
-            best_mask = self.select_best_sam_mask(masks, image_np.shape[:2])
-            
-            if best_mask is not None:
-                # Convert mask to alpha channel
-                alpha = (best_mask * 255).astype(np.uint8)
-                result = image.convert('RGBA')
-                result.putalpha(Image.fromarray(alpha))
-                return result
-            
-        except ImportError:
-            # SAM not installed
-            pass
-        except Exception as e:
-            # SAM failed
-            pass
-        
-        return None
-    
-    def process_with_birefnet(self, image):
-        """Process image with BiRefNet for fine details"""
-        try:
-            # BiRefNet is specialized for fine details and hair
-            import torch
-            import torchvision.transforms as transforms
-            
-            # This would require BiRefNet model - placeholder for now
-            # In practice, you'd load the BiRefNet model here
-            # model = load_birefnet_model()
-            
-            # For now, return None to indicate not available
-            return None
-            
-        except:
-            return None
-    
-    def process_with_modnet(self, image):
-        """Process image with MODNet for portrait matting"""
-        try:
-            # MODNet is excellent for portrait matting
-            import torch
-            import torchvision.transforms as transforms
-            
-            # This would require MODNet model - placeholder for now
-            # In practice, you'd load the MODNet model here
-            # model = load_modnet_model()
-            
-            # For now, return None to indicate not available
-            return None
-            
-        except:
-            return None
-    
-    def select_best_sam_mask(self, masks, image_shape):
-        """Select the best mask from SAM results"""
-        if not masks:
-            return None
-        
-        height, width = image_shape
-        center_x, center_y = width // 2, height // 2
-        
-        best_mask = None
-        best_score = 0
-        
-        for mask_data in masks:
-            mask = mask_data['segmentation']
-            
-            # Calculate score based on size and centrality
-            mask_area = np.sum(mask)
-            
-            # Find mask center
-            y_coords, x_coords = np.where(mask)
-            if len(x_coords) > 0:
-                mask_center_x = np.mean(x_coords)
-                mask_center_y = np.mean(y_coords)
-                
-                # Distance from image center
-                center_dist = np.sqrt((mask_center_x - center_x)**2 + (mask_center_y - center_y)**2)
-                max_dist = np.sqrt(center_x**2 + center_y**2)
-                centrality = 1.0 - (center_dist / max_dist)
-                
-                # Combined score (area + centrality)
-                score = (mask_area / (width * height)) * 0.7 + centrality * 0.3
-                
-                if score > best_score:
-                    best_score = score
-                    best_mask = mask
-        
-        return best_mask
-    
-    def blend_ai_results(self, ai_results, original_image):
-        """Intelligently blend multiple AI results"""
-        try:
-            import numpy as np
-            
-            # Convert all results to numpy arrays
-            masks = []
-            weights = []
-            
-            for method_name, result_image in ai_results:
-                if result_image.mode == 'RGBA':
-                    alpha = np.array(result_image.split()[-1]) / 255.0
-                    masks.append(alpha)
-                    
-                    # Weight based on method quality
-                    if "SAM" in method_name:
-                        weights.append(1.0)  # Highest weight for SAM
-                    elif "BiRefNet" in method_name:
-                        weights.append(0.9)  # High weight for BiRefNet
-                    elif "MODNet" in method_name:
-                        weights.append(0.8)  # Good weight for MODNet
-                    elif "isnet" in method_name:
-                        weights.append(0.7)  # Good weight for isnet
-                    else:
-                        weights.append(0.5)  # Lower weight for others
-            
-            if not masks:
-                return ai_results[0][1]  # Return first result if no masks
-            
-            # Weighted average of masks
-            weights = np.array(weights)
-            weights = weights / np.sum(weights)  # Normalize weights
-            
-            blended_mask = np.zeros_like(masks[0])
-            for mask, weight in zip(masks, weights):
-                blended_mask += mask * weight
-            
-            # Apply blended mask to original image
-            result = original_image.convert('RGBA')
-            result_array = np.array(result)
-            result_array[:, :, 3] = (blended_mask * 255).astype(np.uint8)
-            
-            return Image.fromarray(result_array, 'RGBA')
-            
-        except Exception as e:
-            # Fallback to first result
-            return ai_results[0][1]
-    
-    def advanced_ai_post_process(self, ai_result, original_image):
-        """Apply advanced post-processing to AI results"""
-        try:
-            import numpy as np
-            from scipy import ndimage
-            
-            if ai_result.mode != 'RGBA':
-                return ai_result
-            
-            # Convert to numpy
-            result_array = np.array(ai_result)
-            alpha_channel = result_array[:, :, 3].astype(np.float32) / 255.0
-            
-            # Advanced refinement techniques
-            
-            # 1. Edge-aware smoothing
-            original_array = np.array(original_image.convert('RGB'))
-            gray_original = np.mean(original_array, axis=2)
-            
-            # Detect edges in original image
-            sobel_x = ndimage.sobel(gray_original, axis=1)
-            sobel_y = ndimage.sobel(gray_original, axis=0)
-            edge_magnitude = np.sqrt(sobel_x**2 + sobel_y**2)
-            edge_magnitude = edge_magnitude / np.max(edge_magnitude)
-            
-            # Smooth alpha channel less where there are strong edges
-            smoothed_alpha = ndimage.gaussian_filter(alpha_channel, sigma=1.0)
-            edge_preservation = edge_magnitude
-            refined_alpha = alpha_channel * edge_preservation + smoothed_alpha * (1 - edge_preservation)
-            
-            # 2. Morphological refinement
-            # Remove small noise
-            refined_alpha = ndimage.binary_opening(refined_alpha > 0.5, structure=np.ones((2, 2))).astype(np.float32)
-            refined_alpha = ndimage.binary_closing(refined_alpha, structure=np.ones((4, 4))).astype(np.float32)
-            
-            # 3. Alpha matting refinement (simplified)
-            # Enhance transitions in uncertain regions
-            uncertain_mask = (refined_alpha > 0.1) & (refined_alpha < 0.9)
-            if np.any(uncertain_mask):
-                # Apply additional smoothing to uncertain regions
-                uncertain_smoothed = ndimage.gaussian_filter(refined_alpha, sigma=0.5)
-                refined_alpha = np.where(uncertain_mask, uncertain_smoothed, refined_alpha)
-            
-            # 4. Final quality enhancement
-            refined_alpha = np.clip(refined_alpha, 0, 1)
-            
-            # Apply refined alpha
-            result_array[:, :, 3] = (refined_alpha * 255).astype(np.uint8)
-            
-            return Image.fromarray(result_array, 'RGBA')
-            
-        except Exception as e:
-            # Return original AI result if post-processing fails
-            return ai_result
-    
-    def rgb_to_lab_vectorized(self, rgb_img):
-        """Convert RGB to LAB color space (vectorized)"""
-        try:
-            # Simple RGB to LAB conversion (approximate)
-            # Normalize RGB to 0-1
-            rgb_norm = rgb_img / 255.0
-            
-            # Convert to XYZ (simplified)
-            xyz = np.zeros_like(rgb_norm)
-            xyz[:, :, 0] = 0.412453 * rgb_norm[:, :, 0] + 0.357580 * rgb_norm[:, :, 1] + 0.180423 * rgb_norm[:, :, 2]
-            xyz[:, :, 1] = 0.212671 * rgb_norm[:, :, 0] + 0.715160 * rgb_norm[:, :, 1] + 0.072169 * rgb_norm[:, :, 2]
-            xyz[:, :, 2] = 0.019334 * rgb_norm[:, :, 0] + 0.119193 * rgb_norm[:, :, 1] + 0.950227 * rgb_norm[:, :, 2]
-            
-            # Convert XYZ to LAB (simplified)
-            lab = np.zeros_like(xyz)
-            lab[:, :, 0] = 116 * np.cbrt(xyz[:, :, 1]) - 16  # L
-            lab[:, :, 1] = 500 * (np.cbrt(xyz[:, :, 0]) - np.cbrt(xyz[:, :, 1]))  # A
-            lab[:, :, 2] = 200 * (np.cbrt(xyz[:, :, 1]) - np.cbrt(xyz[:, :, 2]))  # B
-            
-            return lab
-        except:
-            # Fallback to RGB if conversion fails
-            return rgb_img
-    
-    def rgb_to_lab(self, rgb_color):
-        """Convert single RGB color to LAB"""
-        try:
-            # Simple conversion for single color
-            rgb_norm = rgb_color / 255.0
-            
-            # Convert to XYZ
-            x = 0.412453 * rgb_norm[0] + 0.357580 * rgb_norm[1] + 0.180423 * rgb_norm[2]
-            y = 0.212671 * rgb_norm[0] + 0.715160 * rgb_norm[1] + 0.072169 * rgb_norm[2]
-            z = 0.019334 * rgb_norm[0] + 0.119193 * rgb_norm[1] + 0.950227 * rgb_norm[2]
-            
-            # Convert to LAB
-            l = 116 * np.cbrt(y) - 16
-            a = 500 * (np.cbrt(x) - np.cbrt(y))
-            b = 200 * (np.cbrt(y) - np.cbrt(z))
-            
-            return np.array([l, a, b])
-        except:
-            return rgb_color
-        """Process image with professional-grade algorithm"""
-        try:
-            import numpy as np
-            from scipy import ndimage
-            
-            # Convert to RGBA if not already
-            if input_image.mode != 'RGBA':
-                input_image = input_image.convert('RGBA')
-            
-            # Work with full resolution for maximum quality
-            img_array = np.array(input_image)
-            height, width = img_array.shape[:2]
-            
-            # STEP 1: Advanced background detection
-            rgb_img = img_array[:, :, :3].astype(np.float32)
-            
-            # Sample background from edges (more conservative)
-            border_width = max(3, min(15, min(width, height) // 30))
-            
-            # Get border pixels
-            border_pixels = []
-            # Top and bottom borders
-            border_pixels.extend(rgb_img[:border_width, :].reshape(-1, 3))
-            border_pixels.extend(rgb_img[-border_width:, :].reshape(-1, 3))
-            # Left and right borders  
-            border_pixels.extend(rgb_img[:, :border_width].reshape(-1, 3))
-            border_pixels.extend(rgb_img[:, -border_width:].reshape(-1, 3))
-            
-            border_pixels = np.array(border_pixels)
-            
-            # Simple background color estimation (fallback without sklearn)
-            bg_color = np.median(border_pixels, axis=0)
-            
-            # STEP 2: Create probability map with multiple features
-            # Feature 1: Color distance
-            rgb_dist = np.sqrt(np.sum((rgb_img - bg_color) ** 2, axis=2))
-            color_prob = rgb_dist / np.max(rgb_dist) if np.max(rgb_dist) > 0 else rgb_dist
-            
-            # Feature 2: Edge detection for fine details
-            gray_img = np.mean(rgb_img, axis=2)
-            sobel_x = ndimage.sobel(gray_img, axis=1)
-            sobel_y = ndimage.sobel(gray_img, axis=0)
-            edge_magnitude = np.sqrt(sobel_x**2 + sobel_y**2)
-            edge_magnitude = edge_magnitude / np.max(edge_magnitude) if np.max(edge_magnitude) > 0 else edge_magnitude
-            
-            # Feature 3: Center bias (subject likely in center)
-            center_x, center_y = width // 2, height // 2
-            y_coords, x_coords = np.ogrid[:height, :width]
-            center_dist = np.sqrt((x_coords - center_x)**2 + (y_coords - center_y)**2)
-            max_dist = np.sqrt(center_x**2 + center_y**2)
-            center_prob = 1.0 - (center_dist / max_dist)
-            
-            # STEP 3: Combine features
-            final_prob = (0.6 * color_prob +           # Color similarity to background
-                         0.2 * edge_magnitude +        # Edge information
-                         0.2 * center_prob)            # Center bias
-            
-            # STEP 4: Advanced thresholding
-            prob_mean = np.mean(final_prob)
-            prob_std = np.std(final_prob)
-            
-            # Use adaptive threshold
-            threshold = prob_mean + 0.3 * prob_std
-            mask = (final_prob > threshold).astype(np.float32)
-            
-            # STEP 5: Post-processing
-            if self._bg_settings.get('remove_noise', True):
-                # Gentle noise removal
-                mask = ndimage.binary_opening(mask > 0.5, structure=np.ones((2, 2))).astype(np.float32)
-                mask = ndimage.binary_closing(mask, structure=np.ones((4, 4))).astype(np.float32)
-                mask = ndimage.binary_fill_holes(mask > 0.5).astype(np.float32)
-            
-            if self._bg_settings.get('smooth_edges', True):
-                # Edge-preserving smoothing
-                smoothed_mask = ndimage.gaussian_filter(mask, sigma=0.8)
-                edge_preservation = edge_magnitude
-                mask = mask * edge_preservation + smoothed_mask * (1 - edge_preservation)
-            
-            if self._bg_settings.get('feather_edges', False):
-                # Subtle feathering
-                mask = ndimage.gaussian_filter(mask, sigma=1.0)
-            
-            # STEP 6: Apply mask
-            mask = np.clip(mask, 0, 1)
-            final_mask = (mask * 255).astype(np.uint8)
-            
-            result_array = img_array.copy()
-            result_array[:, :, 3] = final_mask
-            
-            return Image.fromarray(result_array, 'RGBA')
-            
-        except Exception as e:
-            # Ultra-conservative fallback
-            if input_image.mode != 'RGBA':
-                input_image = input_image.convert('RGBA')
-            
-            img_array = np.array(input_image)
-            height, width = img_array.shape[:2]
-            
-            # Only remove very obvious background (corners only)
-            corner_pixels = [
-                img_array[0, 0, :3],
-                img_array[0, -1, :3],
-                img_array[-1, 0, :3],
-                img_array[-1, -1, :3]
-            ]
-            bg_color = np.mean(corner_pixels, axis=0)
-            
-            rgb_pixels = img_array[:, :, :3].astype(np.float32)
-            distances = np.sqrt(np.sum((rgb_pixels - bg_color) ** 2, axis=2))
-            
-            # Very high threshold - only remove very similar colors
-            threshold = max(80, np.mean(distances) + 1.5 * np.std(distances))
-            mask = (distances > threshold).astype(np.uint8) * 255
-            
-            result_array = img_array.copy()
-            result_array[:, :, 3] = mask
-            return Image.fromarray(result_array, 'RGBA')
-    
-    def process_professional_bg_removal(self, input_image):
-        """Process image with professional-grade algorithm using GrabCut (like Photoshop)"""
-        try:
-            import numpy as np
-            import cv2
-            from PIL import Image
-            
-            # Convert to RGB for OpenCV processing
-            if input_image.mode != 'RGB':
-                working_image = input_image.convert('RGB')
-            else:
-                working_image = input_image.copy()
-            
-            # Convert to OpenCV format
-            cv_image = cv2.cvtColor(np.array(working_image), cv2.COLOR_RGB2BGR)
-            height, width = cv_image.shape[:2]
-            
-            # Method 1: GrabCut Algorithm (what Photoshop and professional tools use)
-            mask = np.zeros((height, width), np.uint8)
-            bgd_model = np.zeros((1, 65), np.float64)
-            fgd_model = np.zeros((1, 65), np.float64)
-            
-            # Define rectangle around the subject (center 70% of image)
-            margin_x = int(width * 0.15)
-            margin_y = int(height * 0.15)
-            rect = (margin_x, margin_y, width - 2*margin_x, height - 2*margin_y)
-            
-            # Apply GrabCut algorithm
-            cv2.grabCut(cv_image, mask, rect, bgd_model, fgd_model, 5, cv2.GC_INIT_WITH_RECT)
-            
-            # Create mask where sure and likely foreground pixels are marked as 1
-            mask2 = np.where((mask == 2) | (mask == 0), 0, 1).astype('uint8')
-            
-            # Method 2: Edge-based refinement for fine details
-            gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
-            blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-            edges = cv2.Canny(blurred, 50, 150)
-            
-            # Dilate edges to make them thicker
-            kernel = np.ones((3, 3), np.uint8)
-            edges = cv2.dilate(edges, kernel, iterations=1)
-            edge_weight = edges.astype(np.float32) / 255.0
-            
-            # Method 3: Color-based refinement using HSV
-            hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
-            
-            # Sample background colors from edges
-            border_width = max(5, min(20, min(width, height) // 20))
-            bg_samples = []
-            
-            # Sample from all borders
-            bg_samples.extend(hsv[:border_width, :].reshape(-1, 3))
-            bg_samples.extend(hsv[-border_width:, :].reshape(-1, 3))
-            bg_samples.extend(hsv[:, :border_width].reshape(-1, 3))
-            bg_samples.extend(hsv[:, -border_width:].reshape(-1, 3))
-            
-            bg_samples = np.array(bg_samples)
-            bg_mean = np.mean(bg_samples, axis=0)
-            
-            # Create color-based mask
-            color_diff = np.abs(hsv.astype(np.float32) - bg_mean)
-            color_distance = np.sqrt(np.sum(color_diff**2, axis=2))
-            max_color_dist = np.max(color_distance) if np.max(color_distance) > 0 else 1.0
-            color_distance = color_distance / max_color_dist
-            
-            # Pixels different from background are likely foreground
-            color_mask = (color_distance > 0.25).astype(np.uint8)
-            
-            # Method 4: Combine all methods intelligently
-            # Weight: GrabCut (most important), Color analysis, Edge information
-            final_mask = (0.6 * mask2 +           # GrabCut result (primary)
-                         0.3 * color_mask +       # Color-based mask
-                         0.1 * edge_weight)       # Edge information
-            
-            # Threshold to binary mask
-            final_mask = (final_mask > 0.4).astype(np.uint8)
-            
-            # Method 5: Professional post-processing
-            if self._bg_settings.get('remove_noise', True):
-                # Remove small noise artifacts
-                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-                final_mask = cv2.morphologyEx(final_mask, cv2.MORPH_OPEN, kernel)
-                final_mask = cv2.morphologyEx(final_mask, cv2.MORPH_CLOSE, kernel)
-            
-            if self._bg_settings.get('smooth_edges', True):
-                # Smooth edges with bilateral filter (preserves edges while smoothing)
-                final_mask = final_mask.astype(np.float32)
-                final_mask = cv2.GaussianBlur(final_mask, (3, 3), 0)
-                final_mask = cv2.bilateralFilter(final_mask, 9, 75, 75)
-            
-            # Convert back to 0-255 range
-            final_mask = (final_mask * 255).astype(np.uint8)
-            
-            # Create final RGBA result
-            result_rgb = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
-            result = np.zeros((height, width, 4), dtype=np.uint8)
-            result[:, :, :3] = result_rgb
-            result[:, :, 3] = final_mask
-            
-            return Image.fromarray(result, 'RGBA')
-            
-        except Exception as e:
-            # Fallback to simple method if OpenCV fails
-            try:
-                import numpy as np
-                from PIL import Image
-                
-                if input_image.mode != 'RGBA':
-                    input_image = input_image.convert('RGBA')
-                
-                img_array = np.array(input_image)
-                height, width = img_array.shape[:2]
-                
-                # Simple aggressive background removal
-                rgb_img = img_array[:, :, :3].astype(np.float32)
-                
-                # Sample background from corners
-                corner_pixels = [
-                    rgb_img[0, 0],           # Top-left
-                    rgb_img[0, -1],          # Top-right  
-                    rgb_img[-1, 0],          # Bottom-left
-                    rgb_img[-1, -1]          # Bottom-right
-                ]
-                bg_color = np.mean(corner_pixels, axis=0)
-                
-                # Calculate distances
-                distances = np.sqrt(np.sum((rgb_img - bg_color) ** 2, axis=2))
-                
-                # Use aggressive threshold
-                threshold = max(30, np.mean(distances) * 0.5)  # More aggressive
-                mask = (distances > threshold).astype(np.uint8) * 255
-                
-                result_array = img_array.copy()
-                result_array[:, :, 3] = mask
-                return Image.fromarray(result_array, 'RGBA')
-                
-            except:
-                # Return original image if everything fails
-                return input_image.convert('RGBA')
-            sobel_y = ndimage.sobel(gray_img, axis=0)
-            edge_magnitude = np.sqrt(sobel_x**2 + sobel_y**2)
-            edge_magnitude = edge_magnitude / np.max(edge_magnitude) if np.max(edge_magnitude) > 0 else edge_magnitude
-            
-            # Feature 3: Center bias (subject likely in center)
-            center_x, center_y = width // 2, height // 2
-            y_coords, x_coords = np.ogrid[:height, :width]
-            center_dist = np.sqrt((x_coords - center_x)**2 + (y_coords - center_y)**2)
-            max_dist = np.sqrt(center_x**2 + center_y**2)
-            center_prob = 1.0 - (center_dist / max_dist)
-            
-            # STEP 3: Combine features
-            final_prob = (0.6 * color_prob +           # Color similarity to background
-                         0.2 * edge_magnitude +        # Edge information
-                         0.2 * center_prob)            # Center bias
-            
-            # STEP 4: Advanced thresholding
-            prob_mean = np.mean(final_prob)
-            prob_std = np.std(final_prob)
-            
-            # Use adaptive threshold
-            threshold = prob_mean + 0.3 * prob_std
-            mask = (final_prob > threshold).astype(np.float32)
-            
-            # STEP 5: Post-processing
-            if self._bg_settings.get('remove_noise', True):
-                # Gentle noise removal
-                mask = ndimage.binary_opening(mask > 0.5, structure=np.ones((2, 2))).astype(np.float32)
-                mask = ndimage.binary_closing(mask, structure=np.ones((4, 4))).astype(np.float32)
-                mask = ndimage.binary_fill_holes(mask > 0.5).astype(np.float32)
-            
-            if self._bg_settings.get('smooth_edges', True):
-                # Edge-preserving smoothing
-                smoothed_mask = ndimage.gaussian_filter(mask, sigma=0.8)
-                edge_preservation = edge_magnitude
-                mask = mask * edge_preservation + smoothed_mask * (1 - edge_preservation)
-            
-            if self._bg_settings.get('feather_edges', False):
-                # Subtle feathering
-                mask = ndimage.gaussian_filter(mask, sigma=1.0)
-            
-            # STEP 6: Apply mask
-            mask = np.clip(mask, 0, 1)
-            final_mask = (mask * 255).astype(np.uint8)
-            
-            result_array = img_array.copy()
-            result_array[:, :, 3] = final_mask
-            
-            return Image.fromarray(result_array, 'RGBA')
-            
-        except Exception as e:
-            # Ultra-conservative fallback
-            from PIL import Image
-            
-            if input_image.mode != 'RGBA':
-                input_image = input_image.convert('RGBA')
-            
-            img_array = np.array(input_image)
-            height, width = img_array.shape[:2]
-            
-            # Only remove very obvious background (corners only)
-            corner_pixels = [
-                img_array[0, 0, :3],
-                img_array[0, -1, :3],
-                img_array[-1, 0, :3],
-                img_array[-1, -1, :3]
-            ]
-            bg_color = np.mean(corner_pixels, axis=0)
-            
-            rgb_pixels = img_array[:, :, :3].astype(np.float32)
-            distances = np.sqrt(np.sum((rgb_pixels - bg_color) ** 2, axis=2))
-            
-            # Very high threshold - only remove very similar colors
-            threshold = max(80, np.mean(distances) + 1.5 * np.std(distances))
-            mask = (distances > threshold).astype(np.uint8) * 255
-            
-            result_array = img_array.copy()
-            result_array[:, :, 3] = mask
-            return Image.fromarray(result_array, 'RGBA')
-
-    def post_process_background_removal(self, image):
-        """Apply advanced post-processing to improve background removal quality, especially for portraits"""
-        try:
-            import numpy as np
-            from scipy import ndimage
-            
-            if image.mode != 'RGBA':
-                return image
-            
-            img_array = np.array(image)
-            alpha_channel = img_array[:, :, 3].astype(np.float32) / 255.0
-            rgb_channels = img_array[:, :, :3]
-            
-            # Get subject type for specialized processing
-            subject_type = self._bg_settings.get('subject_type', 'Person/Portrait')
-            protect_subject = self._bg_settings.get('protect_subject', True)
-            
-            # Apply subject-specific post-processing
-            if subject_type == "Person/Portrait" and protect_subject:
-                # Portrait-specific processing to preserve facial features and hair
-                
-                # 1. Detect likely face/skin regions using color analysis
-                # Convert to HSV for better skin detection
-                from PIL import Image as PILImage
-                hsv_img = np.array(PILImage.fromarray(rgb_channels).convert('HSV'))
-                
-                # Skin color ranges in HSV (approximate)
-                skin_mask = np.zeros(alpha_channel.shape, dtype=np.float32)
-                
-                # Multiple skin tone ranges
-                skin_ranges = [
-                    ([0, 20, 70], [20, 255, 255]),      # Light skin
-                    ([0, 30, 80], [25, 255, 255]),      # Medium skin  
-                    ([0, 40, 60], [30, 255, 255]),      # Darker skin
-                ]
-                
-                for (lower, upper) in skin_ranges:
-                    lower = np.array(lower, dtype=np.uint8)
-                    upper = np.array(upper, dtype=np.uint8)
-                    
-                    mask = ((hsv_img[:,:,0] >= lower[0]) & (hsv_img[:,:,0] <= upper[0]) &
-                           (hsv_img[:,:,1] >= lower[1]) & (hsv_img[:,:,1] <= upper[1]) &
-                           (hsv_img[:,:,2] >= lower[2]) & (hsv_img[:,:,2] <= upper[2]))
-                    
-                    skin_mask = np.maximum(skin_mask, mask.astype(np.float32))
-                
-                # Expand skin regions slightly to include nearby areas (hair, etc.)
-                if np.any(skin_mask > 0):
-                    skin_mask = ndimage.binary_dilation(skin_mask, structure=np.ones((15, 15))).astype(np.float32)
-                    
-                    # Protect detected skin/face regions
-                    protection_strength = 0.8  # How much to protect (0-1)
-                    alpha_channel = np.maximum(alpha_channel, skin_mask * protection_strength)
-            
-            # Apply standard post-processing based on settings
-            if self._bg_settings.get('remove_noise', True):
-                # Remove small noise artifacts but preserve main subject
-                # Use different kernel sizes based on subject type
-                if subject_type == "Person/Portrait":
-                    # Smaller kernels for portraits to preserve details
-                    alpha_channel = ndimage.binary_opening(alpha_channel > 0.3, structure=np.ones((2, 2))).astype(np.float32)
-                    alpha_channel = ndimage.binary_closing(alpha_channel, structure=np.ones((6, 6))).astype(np.float32)
-                else:
-                    # Standard kernels for objects
-                    alpha_channel = ndimage.binary_opening(alpha_channel > 0.5, structure=np.ones((3, 3))).astype(np.float32)
-                    alpha_channel = ndimage.binary_closing(alpha_channel, structure=np.ones((5, 5))).astype(np.float32)
-                
-                # Fill holes in the subject
-                alpha_channel = ndimage.binary_fill_holes(alpha_channel).astype(np.float32)
-            
-            if self._bg_settings.get('smooth_edges', True):
-                # Edge-preserving smoothing
-                if subject_type == "Person/Portrait":
-                    # Gentler smoothing for portraits to preserve facial features
-                    alpha_channel = ndimage.gaussian_filter(alpha_channel, sigma=0.6)
-                else:
-                    # Standard smoothing for objects
-                    alpha_channel = ndimage.gaussian_filter(alpha_channel, sigma=0.8)
-            
-            if self._bg_settings.get('feather_edges', False):
-                # Additional feathering for soft edges
-                if subject_type == "Person/Portrait":
-                    # Subtle feathering for portraits
-                    alpha_channel = ndimage.gaussian_filter(alpha_channel, sigma=1.0)
-                else:
-                    # More aggressive feathering for objects
-                    alpha_channel = ndimage.gaussian_filter(alpha_channel, sigma=1.5)
-            
-            # Final subject protection pass for portraits
-            if subject_type == "Person/Portrait" and protect_subject:
-                # Ensure center regions are well preserved
-                height, width = alpha_channel.shape
-                center_y, center_x = height // 2, width // 2
-                
-                # Create a center bias mask (stronger in center, weaker at edges)
-                y_coords, x_coords = np.ogrid[:height, :width]
-                center_distances = np.sqrt((x_coords - center_x)**2 + (y_coords - center_y)**2)
-                max_distance = np.sqrt(center_x**2 + center_y**2)
-                
-                # Center bias: 1.0 in center, 0.7 at edges
-                center_bias = 1.0 - (center_distances / max_distance) * 0.3
-                
-                # Apply center bias to strengthen subject areas
-                alpha_channel = np.minimum(1.0, alpha_channel * center_bias + alpha_channel * 0.2)
-            
-            # Apply processed alpha channel
-            img_array[:, :, 3] = np.clip(alpha_channel * 255, 0, 255).astype(np.uint8)
-            
-            return PILImage.fromarray(img_array, 'RGBA')
-            
-        except Exception as e:
-            # Return original if post-processing fails
-            return image
-
-    def show_bg_options_dialog(self):
-        """Show background removal options dialog"""
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Background Removal Options")
-        dialog.setFixedSize(400, 300)
-        dialog.setStyleSheet("""
-            QDialog {
-                background: #161b22;
-                color: #f0f6fc;
-                border: 1px solid #30363d;
-                border-radius: 12px;
-            }
-            QLabel {
-                color: #f0f6fc;
-                font-size: 12px;
-                border: none;
-                background: transparent;
-            }
-            QCheckBox {
-                color: #f0f6fc;
-                font-size: 12px;
-                spacing: 8px;
-            }
-            QCheckBox::indicator {
-                width: 18px;
-                height: 18px;
-                border: 2px solid #30363d;
-                border-radius: 4px;
-                background: #21262d;
-            }
-            QCheckBox::indicator:checked {
-                background: #238636;
-                border-color: #238636;
-            }
-            QComboBox {
-                background: #21262d;
-                color: #f0f6fc;
-                border: 1px solid #30363d;
-                border-radius: 6px;
-                padding: 4px 10px;
-                font-size: 13px;
-                min-height: 32px;
-            }
-        """)
-        
-        layout = QVBoxLayout(dialog)
-        layout.setSpacing(20)
-        layout.setContentsMargins(25, 25, 25, 25)
-        
-        # Title
-        title = QLabel("Background Removal Options")
-        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #58a6ff;")
-        layout.addWidget(title)
-        
-        # Options
-        options_layout = QVBoxLayout()
-        options_layout.setSpacing(15)
-        
-        # Keep original files
-        keep_original_cb = QCheckBox("Keep original files")
-        keep_original_cb.setChecked(self._bg_settings['keep_original'])
-        options_layout.addWidget(keep_original_cb)
-        
-        # High quality processing
-        high_quality_cb = QCheckBox("High quality processing")
-        high_quality_cb.setChecked(self._bg_settings['high_quality'])
-        options_layout.addWidget(high_quality_cb)
-        
-        # Output format
-        format_row = QHBoxLayout()
-        format_label = QLabel("Output format:")
-        format_label.setFixedWidth(120)
-        format_row.addWidget(format_label)
-        
-        format_combo = QComboBox()
-        format_combo.addItems(["PNG", "JPEG", "WEBP"])
-        format_combo.setCurrentText(self._bg_settings['output_format'])
-        format_row.addWidget(format_combo)
-        format_row.addStretch()
-        options_layout.addLayout(format_row)
-        
-        # AI Model (backgroundremover uses different models)
-        model_row = QHBoxLayout()
-        model_label = QLabel("AI Model:")
-        model_label.setFixedWidth(120)
-        model_row.addWidget(model_label)
-        
-        model_combo = QComboBox()
-        # Enhanced model options for better quality
-        model_combo.addItems([
-            "u2net_human_seg", # BEST for people/portraits - moved to top
-            "u2net",           # General purpose - good balance
-            "u2netp",          # Lighter version, faster
-            "silueta",         # Good for objects
-            "isnet-general-use", # High quality general
-            "sam"              # Segment Anything Model (if available)
-        ])
-        current_model = self._bg_settings.get('model', 'u2net_human_seg')  # Default to human model
-        if current_model in ["u2net", "u2net_human_seg", "u2netp", "silueta", "isnet-general-use", "sam"]:
-            model_combo.setCurrentText(current_model)
-        else:
-            model_combo.setCurrentText("u2net_human_seg")  # Default to human model
-        model_row.addWidget(model_combo)
-        model_row.addStretch()
-        options_layout.addLayout(model_row)
-        
-        # Add subject type selection for better processing
-        subject_row = QHBoxLayout()
-        subject_label = QLabel("Subject Type:")
-        subject_label.setFixedWidth(120)
-        subject_row.addWidget(subject_label)
-        
-        subject_combo = QComboBox()
-        subject_combo.addItems([
-            "Person/Portrait",  # Default - best for human subjects
-            "Object/Product",   # For objects, products
-            "Animal/Pet",       # For animals
-            "Auto-Detect"       # Let algorithm decide
-        ])
-        subject_combo.setCurrentText(self._bg_settings.get('subject_type', 'Person/Portrait'))
-        subject_row.addWidget(subject_combo)
-        subject_row.addStretch()
-        options_layout.addLayout(subject_row)
-        
-        # Add post-processing options for better quality
-        postprocess_label = QLabel("Post-Processing:")
-        postprocess_label.setStyleSheet("font-weight: bold; color: #58a6ff; margin-top: 10px;")
-        options_layout.addWidget(postprocess_label)
-        
-        # Edge smoothing
-        smooth_edges_cb = QCheckBox("Smooth edges (reduces jagged cuts)")
-        smooth_edges_cb.setChecked(self._bg_settings.get('smooth_edges', True))
-        options_layout.addWidget(smooth_edges_cb)
-        
-        # Feather edges
-        feather_edges_cb = QCheckBox("Feather edges (soft transition)")
-        feather_edges_cb.setChecked(self._bg_settings.get('feather_edges', False))
-        options_layout.addWidget(feather_edges_cb)
-        
-        # Remove noise
-        remove_noise_cb = QCheckBox("Remove small noise artifacts")
-        remove_noise_cb.setChecked(self._bg_settings.get('remove_noise', True))
-        options_layout.addWidget(remove_noise_cb)
-        
-        # Subject protection
-        protect_subject_cb = QCheckBox("Extra subject protection (for portraits)")
-        protect_subject_cb.setChecked(self._bg_settings.get('protect_subject', True))
-        options_layout.addWidget(protect_subject_cb)
-        
-        layout.addLayout(options_layout)
-        layout.addStretch()
-        
-        # Buttons
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        
-        def save_and_close():
-            self._bg_settings['keep_original'] = keep_original_cb.isChecked()
-            self._bg_settings['high_quality'] = high_quality_cb.isChecked()
-            self._bg_settings['output_format'] = format_combo.currentText()
-            self._bg_settings['model'] = model_combo.currentText()
-            self._bg_settings['subject_type'] = subject_combo.currentText()
-            self._bg_settings['smooth_edges'] = smooth_edges_cb.isChecked()
-            self._bg_settings['feather_edges'] = feather_edges_cb.isChecked()
-            self._bg_settings['remove_noise'] = remove_noise_cb.isChecked()
-            self._bg_settings['protect_subject'] = protect_subject_cb.isChecked()
-            
-            # Save settings to QSettings for persistence
-            self.settings.setValue("bg_keep_original", self._bg_settings['keep_original'])
-            self.settings.setValue("bg_high_quality", self._bg_settings['high_quality'])
-            self.settings.setValue("bg_output_format", self._bg_settings['output_format'])
-            self.settings.setValue("bg_model", self._bg_settings['model'])
-            self.settings.setValue("bg_subject_type", self._bg_settings['subject_type'])
-            self.settings.setValue("bg_smooth_edges", self._bg_settings['smooth_edges'])
-            self.settings.setValue("bg_feather_edges", self._bg_settings['feather_edges'])
-            self.settings.setValue("bg_remove_noise", self._bg_settings['remove_noise'])
-            self.settings.setValue("bg_protect_subject", self._bg_settings['protect_subject'])
-            self.settings.sync()
-            
-            dialog.accept()
-        
-        save_btn = QPushButton("Save")
-        save_btn.setFixedSize(100, 36)
-        save_btn.clicked.connect(save_and_close)
-        save_btn.setStyleSheet("""
-            QPushButton {
-                background: #238636;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                font-size: 13px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background: #2ea043;
-            }
-        """)
-        btn_layout.addWidget(save_btn)
-        
-        layout.addLayout(btn_layout)
-        
-        dialog.exec()
-
-    def process_remove_backgrounds(self):
-        """Process background removal"""
-        if not self.bg_selected_files:
-            QMessageBox.warning(self, "Warning", "Please select images to process")
-            return
-        
-        # Check available background removal methods
-        available_methods = []
-        
-        # Check for advanced AI models (with proper error handling)
-        try:
-            import torch
-            # Test if PyTorch actually works (not just imports)
-            test_tensor = torch.tensor([1.0])
-            available_methods.append("advanced_ai")
-        except (ImportError, OSError, RuntimeError) as e:
-            # PyTorch not available or DLL issues
-            pass
-        
-        # Check for backgroundremover (without PyTorch dependency check)
-        try:
-            import backgroundremover
-            # Test if backgroundremover works without importing torch directly
-            available_methods.append("backgroundremover")
-        except ImportError:
-            pass
-        
-        # Check for rembg (fallback)
-        try:
-            import rembg
-            # Test if onnxruntime backend is available
-            from PIL import Image
-            test_img = Image.new('RGB', (10, 10), 'red')
-            rembg.remove(test_img)  # This will fail if no backend
-            available_methods.append("rembg")
-        except:
-            pass
-        
-        # Always add professional and simple methods as fallbacks
-        available_methods.extend(["professional", "simple"])
-        
-        # Show method selection dialog with enhanced options
-        method_dialog = QMessageBox(self)
-        method_dialog.setWindowTitle("Choose Background Removal Method")
-        method_dialog.setIcon(QMessageBox.Icon.Question)
-        method_dialog.setText("Select background removal method:")
-        
-        method_info = []
-        if "advanced_ai" in available_methods:
-            method_info.append("• Advanced AI: State-of-the-art deep learning (BEST QUALITY)")
-        if "backgroundremover" in available_methods:
-            method_info.append("• backgroundremover: AI-powered (may require model download)")
-        if "rembg" in available_methods:
-            method_info.append("• rembg: AI-powered (faster startup)")
-        method_info.append("• Professional: Advanced algorithms with hair detection (RECOMMENDED)")
-        method_info.append("• Simple: Basic edge detection (fast, no downloads)")
-        
-        # Add note about PyTorch issues if Advanced AI is not available
-        if "advanced_ai" not in available_methods and any("torch" in str(e) for e in []):
-            method_info.append("\n⚠️ Advanced AI unavailable due to PyTorch compatibility issues")
-            method_info.append("Professional method provides excellent results as alternative")
-        
-        method_dialog.setInformativeText("\n".join(method_info) + "\n\nWhich method would you like to use?")
-        
-        method_dialog.setStyleSheet("""
-            QMessageBox {
-                background: #161b22;
-                color: #f0f6fc;
-                border: 2px solid #30363d;
-                border-radius: 12px;
-            }
-            QMessageBox QLabel { color: #f0f6fc; font-size: 12px; }
-            QMessageBox QPushButton {
-                background: #238636;
-                color: white; border: none; border-radius: 6px; font-size: 11px; font-weight: bold;
-                padding: 8px 16px; min-width: 80px; margin: 2px;
-            }
-            QMessageBox QPushButton:hover { background: #2ea043; }
-        """)
-        
-        buttons = []
-        if "advanced_ai" in available_methods:
-            ai_btn = method_dialog.addButton("Advanced AI", QMessageBox.ButtonRole.AcceptRole)
-            buttons.append(("advanced_ai", ai_btn))
-        if "backgroundremover" in available_methods:
-            bg_btn = method_dialog.addButton("backgroundremover", QMessageBox.ButtonRole.AcceptRole)
-            buttons.append(("backgroundremover", bg_btn))
-        if "rembg" in available_methods:
-            rembg_btn = method_dialog.addButton("rembg", QMessageBox.ButtonRole.AcceptRole)
-            buttons.append(("rembg", rembg_btn))
-        
-        prof_btn = method_dialog.addButton("Professional", QMessageBox.ButtonRole.AcceptRole)
-        buttons.append(("professional", prof_btn))
-        simple_btn = method_dialog.addButton("Simple", QMessageBox.ButtonRole.AcceptRole)
-        buttons.append(("simple", simple_btn))
-        cancel_btn = method_dialog.addButton(QMessageBox.StandardButton.Cancel)
-        
-        method_dialog.exec()
-        
-        selected_method = "professional"  # Default to professional (excellent quality)
-        for method_name, button in buttons:
-            if method_dialog.clickedButton() == button:
-                selected_method = method_name
-                break
-        
-        if method_dialog.clickedButton() == cancel_btn:
-            return
-        
-        # Warn about potential delays for AI methods
-        if selected_method in ["backgroundremover", "rembg"]:
-            warning_msg = QMessageBox(self)
-            warning_msg.setWindowTitle("Processing Time Warning")
-            warning_msg.setIcon(QMessageBox.Icon.Information)
-            warning_msg.setText("AI Background Removal")
-            warning_msg.setInformativeText(
-                f"Using {selected_method} method.\n\n"
-                "⚠️ First time use may take 5-10 minutes to download AI models.\n"
-                "⚠️ If it takes too long, you can stop and try 'simple' method instead.\n\n"
-                f"Continue with {selected_method}?"
-            )
-            warning_msg.setStyleSheet("""
-                QMessageBox {
-                    background: #161b22;
-                    color: #f0f6fc;
-                    border: 2px solid #30363d;
-                    border-radius: 12px;
-                }
-                QMessageBox QLabel { color: #f0f6fc; font-size: 12px; }
-                QMessageBox QPushButton {
-                    background: #238636;
-                    color: white; border: none; border-radius: 6px; font-size: 11px; font-weight: bold;
-                    padding: 8px 16px; min-width: 80px; margin: 2px;
-                }
-                QMessageBox QPushButton:hover { background: #2ea043; }
-            """)
-            
-            continue_btn = warning_msg.addButton("Continue", QMessageBox.ButtonRole.AcceptRole)
-            cancel_btn = warning_msg.addButton(QMessageBox.StandardButton.Cancel)
-            
-            warning_msg.exec()
-            
-            if warning_msg.clickedButton() != continue_btn:
-                return
-        
-        output_dir = self.bg_output_dir.text().strip()
-        if not output_dir:
-            output_dir = "downloads/no_background"
-        
-        # Start processing
-        self.bg_processing_stopped = False
-        self.bg_process_btn.setEnabled(False)
-        self.bg_stop_btn.setEnabled(True)
-        
-        if selected_method == "backgroundremover":
-            self.bg_status_label.setText("Downloading AI model (may take several minutes)...")
-        else:
-            self.bg_status_label.setText("Removing backgrounds...")
-        
-        self.bg_progress_bar.setMaximum(len(self.bg_selected_files))
-        self.bg_progress_bar.setValue(0)
-        self.bg_log_text.clear()
-        
-        self.bg_log(f"=== Starting background removal for {len(self.bg_selected_files)} images ===")
-        self.bg_log(f"Output directory: {output_dir}")
-        self.bg_log(f"Method: {selected_method}")
-        
-        if selected_method == "backgroundremover":
-            self.bg_log("Note: First run may take 5-10 minutes to download AI model...")
-            self.bg_log("You can stop processing if it takes too long and try rembg method instead.")
-        
-        # Process in background thread
-        def process_worker():
-            try:
-                import os
-                from pathlib import Path
-                from PIL import Image
-                import time
-                
-                # Create output directory
-                Path(output_dir).mkdir(parents=True, exist_ok=True)
-                
-                successful = 0
-                failed = 0
-                model_downloaded = False
-                
-                for i, file_path in enumerate(self.bg_selected_files):
-                    if self.bg_processing_stopped:
-                        QTimer.singleShot(0, lambda: self.bg_log("Stopped by user"))
-                        break
-                    
-                    # Update progress
-                    QTimer.singleShot(0, lambda i=i+1: self.bg_progress_bar.setValue(i))
-                    QTimer.singleShot(0, lambda i=i+1: self.bg_status_label.setText(f"Processing {i}/{len(self.bg_selected_files)}..."))
-                    
-                    filename = os.path.basename(file_path)
-                    QTimer.singleShot(0, lambda f=filename: self.bg_log(f"Processing: {f}"))
-                    
-                    try:
-                        # Load image
-                        QTimer.singleShot(0, lambda: self.bg_log("Loading image..."))
-                        input_image = Image.open(file_path)
-                        
-                        # Log image info
-                        QTimer.singleShot(0, lambda s=input_image.size, m=input_image.mode: self.bg_log(f"Image size: {s}, mode: {m}"))
-                        
-                        # Remove background using selected method
-                        if selected_method == "advanced_ai":
-                            QTimer.singleShot(0, lambda: self.bg_log("Initializing Advanced AI background removal..."))
-                            start_time = time.time()
-                            
-                            try:
-                                # Advanced AI method using multiple approaches
-                                QTimer.singleShot(0, lambda: self.bg_log("Attempting advanced background removal..."))
-                                
-                                # Try backgroundremover first (most reliable without PyTorch issues)
-                                try:
-                                    from backgroundremover.bg import remove
-                                    ai_result = remove(input_image)
-                                    if ai_result:
-                                        QTimer.singleShot(0, lambda: self.bg_log("✅ backgroundremover successful"))
-                                        output_image = ai_result
-                                    else:
-                                        raise Exception("backgroundremover returned None")
-                                except Exception as e:
-                                    QTimer.singleShot(0, lambda e=str(e): self.bg_log(f"backgroundremover failed: {e[:50]}"))
-                                    
-                                    # Try rembg as fallback
-                                    try:
-                                        import rembg
-                                        # Try the best available models
-                                        best_models = ["isnet-general-use", "u2net_human_seg", "silueta", "u2net"]
-                                        
-                                        for model_name in best_models:
-                                            try:
-                                                session = rembg.new_session(model_name)
-                                                ai_result = rembg.remove(input_image, session=session)
-                                                if ai_result:
-                                                    QTimer.singleShot(0, lambda m=model_name: self.bg_log(f"✅ rembg {m} successful"))
-                                                    output_image = ai_result
-                                                    break
-                                            except:
-                                                continue
-                                        else:
-                                            raise Exception("No rembg models worked")
-                                            
-                                    except Exception as e:
-                                        QTimer.singleShot(0, lambda e=str(e): self.bg_log(f"rembg failed: {e[:50]}"))
-                                        raise Exception("All AI methods failed")
-                                
-                                # Apply post-processing to AI result
-                                if output_image and output_image.mode == 'RGBA':
-                                    output_image = self.post_process_background_removal(output_image)
-                                    QTimer.singleShot(0, lambda: self.bg_log("✅ Applied AI post-processing"))
-                                
-                            except Exception as e:
-                                # Fallback to professional method
-                                QTimer.singleShot(0, lambda e=str(e): self.bg_log(f"Advanced AI failed: {e} - using professional fallback"))
-                                selected_method = "professional"
-                                # Continue to professional method below
-                        
-                        if selected_method == "professional":
-                            QTimer.singleShot(0, lambda: self.bg_log("Using professional-grade algorithm..."))
-                            start_time = time.time()
-                            output_image = self.process_professional_bg_removal(input_image)
-                        
-                        elif selected_method == "backgroundremover":
-                            if not model_downloaded:
-                                QTimer.singleShot(0, lambda: self.bg_log("Downloading AI model (this may take 5-10 minutes)..."))
-                                QTimer.singleShot(0, lambda: self.bg_status_label.setText("Downloading AI model..."))
-                            else:
-                                QTimer.singleShot(0, lambda: self.bg_log("Removing background..."))
-                            
-                            start_time = time.time()
-                            
-                            from backgroundremover.bg import remove
-                            output_image = remove(input_image)
-                            
-                            if not model_downloaded:
-                                model_downloaded = True
-                                QTimer.singleShot(0, lambda: self.bg_log("✅ AI model downloaded successfully"))
-                            
-                        elif selected_method == "rembg":
-                            QTimer.singleShot(0, lambda: self.bg_log("Removing background with rembg..."))
-                            start_time = time.time()
-                            
-                            import rembg
-                            model_name = self._bg_settings.get('model', 'u2net_human_seg')
-                            subject_type = self._bg_settings.get('subject_type', 'Person/Portrait')
-                            
-                            # Auto-select best model based on subject type
-                            if subject_type == "Person/Portrait":
-                                if model_name not in ["u2net_human_seg", "silueta"]:
-                                    model_name = "u2net_human_seg"
-                                    QTimer.singleShot(0, lambda: self.bg_log("Using u2net_human_seg model for portrait..."))
-                            elif subject_type == "Object/Product":
-                                if model_name not in ["u2net", "silueta"]:
-                                    model_name = "u2net"
-                                    QTimer.singleShot(0, lambda: self.bg_log("Using u2net model for object..."))
-                            
-                            # Use specific model for better quality
-                            if model_name == "isnet-general-use":
-                                # High quality model
-                                session = rembg.new_session('isnet-general-use')
-                                output_image = rembg.remove(input_image, session=session)
-                            elif model_name == "u2net_human_seg":
-                                # Best for people - use with optimized settings
-                                session = rembg.new_session('u2net_human_seg')
-                                output_image = rembg.remove(input_image, session=session)
-                                QTimer.singleShot(0, lambda: self.bg_log("Applied human-optimized processing"))
-                            else:
-                                # Default models
-                                output_image = rembg.remove(input_image, model_name=model_name)
-                        
-                        else:  # simple method - PROFESSIONAL GRADE ALGORITHM
-                            QTimer.singleShot(0, lambda: self.bg_log("Using professional-grade algorithm..."))
-                            start_time = time.time()
-                            output_image = self.process_professional_bg_removal(input_image)
-                        
-                        # Apply post-processing to AI results as well
-                        if selected_method in ["backgroundremover", "rembg"] and output_image.mode == 'RGBA':
-                            QTimer.singleShot(0, lambda: self.bg_log("Applying post-processing..."))
-                            output_image = self.post_process_background_removal(output_image)
-                        
-                        process_time = time.time() - start_time
-                        QTimer.singleShot(0, lambda t=process_time: self.bg_log(f"Background removed in {t:.1f}s"))
-                        
-                        # Save result
-                        name, ext = os.path.splitext(filename)
-                        output_format = self._bg_settings.get('output_format', 'PNG')
-                        
-                        if output_format == 'PNG':
-                            output_filename = f"{name}_no_bg.png"
-                        elif output_format == 'JPEG':
-                            output_filename = f"{name}_no_bg.jpg"
-                            # Convert RGBA to RGB for JPEG
-                            if output_image.mode == 'RGBA':
-                                rgb_image = Image.new('RGB', output_image.size, (255, 255, 255))
-                                rgb_image.paste(output_image, mask=output_image.split()[-1])
-                                output_image = rgb_image
-                        else:  # WEBP
-                            output_filename = f"{name}_no_bg.webp"
-                        
-                        output_path = os.path.join(output_dir, output_filename)
-                        
-                        QTimer.singleShot(0, lambda: self.bg_log("Saving result..."))
-                        
-                        # Save with quality settings
-                        if output_format == 'JPEG':
-                            quality = 95 if self._bg_settings.get('high_quality', True) else 85
-                            output_image.save(output_path, format='JPEG', quality=quality)
-                        elif output_format == 'WEBP':
-                            quality = 95 if self._bg_settings.get('high_quality', True) else 85
-                            output_image.save(output_path, format='WEBP', quality=quality)
-                        else:  # PNG
-                            output_image.save(output_path, format='PNG')
-                        
-                        successful += 1
-                        QTimer.singleShot(0, lambda f=output_filename: self.bg_log(f"✅ Saved: {f}"))
-                        
-                    except Exception as e:
-                        failed += 1
-                        error_msg = str(e)
-                        QTimer.singleShot(0, lambda f=filename, e=error_msg: self.bg_log(f"❌ Failed {f}: {e}"))
-                        
-                        # Log more detailed error for debugging
-                        import traceback
-                        full_error = traceback.format_exc()
-                        QTimer.singleShot(0, lambda fe=full_error: self.bg_log(f"Full error: {fe[:500]}..."))
-                
-                # Complete
-                QTimer.singleShot(0, lambda: self.bg_processing_complete(successful, failed, output_dir))
-                
-            except Exception as e:
-                import traceback
-                full_error = traceback.format_exc()
-                QTimer.singleShot(0, lambda e=str(e), fe=full_error: self.bg_processing_error(f"{e}\n\nFull traceback:\n{fe}"))
-        
-        # Process directly on main thread with UI updates (no threading to avoid hangs)
-        self.bg_log("Starting direct processing...")
-        
-        try:
-            import os
-            from pathlib import Path
-            from PIL import Image
-            import time
-            import numpy as np
-            
-            # Create output directory
-            Path(output_dir).mkdir(parents=True, exist_ok=True)
-            self.bg_log("Output directory created")
-            
-            successful = 0
-            failed = 0
-            
-            for i, file_path in enumerate(self.bg_selected_files):
-                if self.bg_processing_stopped:
-                    self.bg_log("Stopped by user")
-                    break
-                
-                # Update progress
-                self.bg_progress_bar.setValue(i + 1)
-                self.bg_status_label.setText(f"Processing {i+1}/{len(self.bg_selected_files)}...")
-                QApplication.processEvents()  # Keep UI responsive
-                
-                filename = os.path.basename(file_path)
-                self.bg_log(f"Processing: {filename}")
-                self.bg_log(f"Output format: {self._bg_settings.get('output_format', 'PNG')}")
-                self.bg_log(f"High quality: {self._bg_settings.get('high_quality', True)}")
-                QApplication.processEvents()
-                
-                try:
-                    # Load image
-                    self.bg_log("Loading image...")
-                    QApplication.processEvents()
-                    
-                    input_image = Image.open(file_path)
-                    self.bg_log(f"Image loaded: {input_image.size}, mode: {input_image.mode}")
-                    QApplication.processEvents()
-                    
-                    start_time = time.time()
-                    
-                    # Process based on selected method
-                    if selected_method == "simple":
-                        self.bg_log("Starting enhanced simple background removal...")
-                        QApplication.processEvents()
-                        
-                        # Convert to RGBA
-                        if input_image.mode != 'RGBA':
-                            input_image = input_image.convert('RGBA')
-                        
-                        # Resize for speed but keep reasonable quality
-                        original_size = input_image.size
-                        max_size = 1000  # Increased for better quality
-                        if max(original_size) > max_size:
-                            ratio = max_size / max(original_size)
-                            new_size = (int(original_size[0] * ratio), int(original_size[1] * ratio))
-                            working_image = input_image.resize(new_size, Image.Resampling.LANCZOS)
-                            self.bg_log(f"Resized to {new_size} for processing")
-                        else:
-                            working_image = input_image.copy()
-                            self.bg_log("Processing at original resolution")
-                        
-                        QApplication.processEvents()
-                        
-                        # Convert to numpy
-                        img_array = np.array(working_image)
-                        height, width = img_array.shape[:2]
-                        
-                        # Enhanced background detection - sample larger areas
-                        sample_size = min(30, width//8, height//8)
-                        
-                        # Sample corner regions (not just single pixels)
-                        corners = []
-                        # Top-left corner
-                        tl_region = img_array[0:sample_size, 0:sample_size, :3]
-                        corners.append(np.mean(tl_region.reshape(-1, 3), axis=0))
-                        
-                        # Top-right corner
-                        tr_region = img_array[0:sample_size, -sample_size:, :3]
-                        corners.append(np.mean(tr_region.reshape(-1, 3), axis=0))
-                        
-                        # Bottom-left corner
-                        bl_region = img_array[-sample_size:, 0:sample_size, :3]
-                        corners.append(np.mean(bl_region.reshape(-1, 3), axis=0))
-                        
-                        # Bottom-right corner
-                        br_region = img_array[-sample_size:, -sample_size:, :3]
-                        corners.append(np.mean(br_region.reshape(-1, 3), axis=0))
-                        
-                        # Also sample edges for better background detection
-                        # Top edge
-                        top_edge = img_array[0:sample_size//2, sample_size:-sample_size, :3]
-                        if top_edge.size > 0:
-                            corners.append(np.mean(top_edge.reshape(-1, 3), axis=0))
-                        
-                        # Bottom edge
-                        bottom_edge = img_array[-sample_size//2:, sample_size:-sample_size, :3]
-                        if bottom_edge.size > 0:
-                            corners.append(np.mean(bottom_edge.reshape(-1, 3), axis=0))
-                        
-                        # Left edge
-                        left_edge = img_array[sample_size:-sample_size, 0:sample_size//2, :3]
-                        if left_edge.size > 0:
-                            corners.append(np.mean(left_edge.reshape(-1, 3), axis=0))
-                        
-                        # Right edge
-                        right_edge = img_array[sample_size:-sample_size, -sample_size//2:, :3]
-                        if right_edge.size > 0:
-                            corners.append(np.mean(right_edge.reshape(-1, 3), axis=0))
-                        
-                        # Calculate background color from all samples
-                        bg_color = np.mean(corners, axis=0)
-                        self.bg_log(f"Detected background color: {bg_color}")
-                        
-                        QApplication.processEvents()
-                        
-                        self.bg_log("Creating enhanced transparency mask...")
-                        QApplication.processEvents()
-                        
-                        # Calculate color distances
-                        rgb_pixels = img_array[:, :, :3].astype(np.float32)
-                        distances = np.sqrt(np.sum((rgb_pixels - bg_color) ** 2, axis=2))
-                        
-                        # Use adaptive threshold based on image characteristics
-                        distance_std = np.std(distances)
-                        distance_mean = np.mean(distances)
-                        
-                        # Adaptive threshold - more sensitive for images with clear backgrounds
-                        if distance_std < 20:  # Low variation = clear background
-                            threshold = max(25, distance_mean * 0.5)
-                        else:  # High variation = complex background
-                            threshold = max(40, distance_mean * 0.3)
-                        
-                        self.bg_log(f"Using adaptive threshold: {threshold:.1f}")
-                        
-                        # Create initial mask
-                        mask = (distances > threshold).astype(np.uint8) * 255
-                        
-                        # Enhanced mask processing for better edges
-                        from PIL import ImageFilter
-                        
-                        # Convert mask to PIL for filtering
-                        mask_image = Image.fromarray(mask, 'L')
-                        
-                        # Apply slight blur to soften edges
-                        mask_image = mask_image.filter(ImageFilter.GaussianBlur(radius=0.5))
-                        
-                        # Convert back to numpy
-                        mask = np.array(mask_image)
-                        
-                        # Apply morphological operations to clean up mask
-                        # Remove small noise (salt and pepper)
-                        kernel_size = max(3, min(7, min(width, height) // 100))
-                        
-                        # Simple morphological operations without scipy
-                        # Erosion followed by dilation (opening) to remove noise
-                        from PIL import ImageFilter
-                        
-                        # Convert to PIL for morphological operations
-                        mask_pil = Image.fromarray(mask, 'L')
-                        
-                        # Minimum filter (erosion)
-                        mask_pil = mask_pil.filter(ImageFilter.MinFilter(3))
-                        # Maximum filter (dilation)
-                        mask_pil = mask_pil.filter(ImageFilter.MaxFilter(3))
-                        
-                        # Convert back
-                        mask = np.array(mask_pil)
-                        
-                        # Apply mask to alpha channel
-                        result_array = img_array.copy()
-                        result_array[:, :, 3] = mask
-                        result_image = Image.fromarray(result_array, 'RGBA')
-                        
-                        # Resize back to original size with highest quality
-                        if original_size != result_image.size:
-                            # Use highest quality resampling for final output
-                            output_image = result_image.resize(original_size, Image.Resampling.LANCZOS)
-                            self.bg_log(f"Resized back to original size: {original_size}")
-                        else:
-                            output_image = result_image
-                        
-                        self.bg_log("✅ Enhanced background removal completed")
-                        
-                    elif selected_method == "backgroundremover":
-                        self.bg_log("Using backgroundremover (may take time)...")
-                        QApplication.processEvents()
-                        
-                        from backgroundremover.bg import remove
-                        output_image = remove(input_image)
-                        
-                    elif selected_method == "rembg":
-                        self.bg_log("Using rembg...")
-                        QApplication.processEvents()
-                        
-                        import rembg
-                        model_name = self._bg_settings.get('model', 'u2net')
-                        output_image = rembg.remove(input_image, model_name=model_name)
-                    
-                    else:
-                        # Fallback
-                        output_image = input_image.convert('RGBA')
-                    
-                    process_time = time.time() - start_time
-                    self.bg_log(f"Processing completed in {process_time:.1f}s")
-                    QApplication.processEvents()
-                    
-                    # Save result
-                    name, ext = os.path.splitext(filename)
-                    output_format = self._bg_settings.get('output_format', 'PNG')
-                    
-                    if output_format == 'PNG':
-                        output_filename = f"{name}_no_bg.png"
-                    elif output_format == 'JPEG':
-                        output_filename = f"{name}_no_bg.jpg"
-                        if output_image.mode == 'RGBA':
-                            rgb_image = Image.new('RGB', output_image.size, (255, 255, 255))
-                            rgb_image.paste(output_image, mask=output_image.split()[-1])
-                            output_image = rgb_image
-                    else:  # WEBP
-                        output_filename = f"{name}_no_bg.webp"
-                    
-                    output_path = os.path.join(output_dir, output_filename)
-                    
-                    self.bg_log(f"Saving to: {output_filename}")
-                    QApplication.processEvents()
-                    
-                    # Save with quality settings
-                    if output_format == 'JPEG':
-                        quality = 95 if self._bg_settings.get('high_quality', True) else 85
-                        output_image.save(output_path, format='JPEG', quality=quality, optimize=True)
-                        self.bg_log(f"Saved as JPEG with quality {quality}")
-                    elif output_format == 'WEBP':
-                        quality = 95 if self._bg_settings.get('high_quality', True) else 85
-                        output_image.save(output_path, format='WEBP', quality=quality, method=6)
-                        self.bg_log(f"Saved as WEBP with quality {quality}")
-                    else:  # PNG
-                        # PNG is lossless - use compression level instead of quality
-                        compress_level = 1 if self._bg_settings.get('high_quality', True) else 6
-                        output_image.save(output_path, format='PNG', compress_level=compress_level, optimize=True)
-                        self.bg_log(f"Saved as PNG with compression level {compress_level} (lossless)")
-                    
-                    successful += 1
-                    self.bg_log(f"✅ Saved: {output_filename}")
-                    QApplication.processEvents()
-                    
-                except Exception as e:
-                    failed += 1
-                    error_msg = str(e)
-                    self.bg_log(f"❌ Failed {filename}: {error_msg}")
-                    
-                    import traceback
-                    full_error = traceback.format_exc()
-                    self.bg_log(f"Full error: {full_error[:300]}...")
-                    QApplication.processEvents()
-            
-            # Complete
-            self.bg_log("Processing completed")
-            self.bg_processing_complete(successful, failed, output_dir)
-            
-        except Exception as e:
-            import traceback
-            full_error = traceback.format_exc()
-            self.bg_processing_error(f"Processing error: {str(e)}\n\nFull traceback:\n{full_error}")
-
-    def stop_bg_processing(self):
-        """Stop background removal processing"""
-        self.bg_processing_stopped = True
-
-    def bg_log(self, message):
-        """Log message to background removal log"""
-        self.bg_log_text.append(message)
-        scrollbar = self.bg_log_text.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
-        QApplication.processEvents()
-
-    def bg_processing_complete(self, successful, failed, output_dir):
-        """Handle completion of background removal"""
-        self.bg_log("")
-        self.bg_log(f"=== Processing Complete ===")
-        self.bg_log(f"Successful: {successful}")
-        self.bg_log(f"Failed: {failed}")
-        
-        self.bg_status_label.setText("Processing complete")
-        self.bg_progress_bar.setValue(self.bg_progress_bar.maximum())
-        self.bg_process_btn.setEnabled(True)
-        self.bg_stop_btn.setEnabled(False)
-        
-        # Show completion dialog
-        msg_box = QMessageBox(self)
-        msg_box.setWindowTitle("Background Removal Complete")
-        msg_box.setText("Background removal finished!")
-        msg_box.setInformativeText(f"Successful: {successful}\nFailed: {failed}\n\nFiles saved to: {output_dir}")
-        msg_box.setIcon(QMessageBox.Icon.Information)
-        
-        # Apply dark theme
-        msg_box.setStyleSheet("""
-            QMessageBox {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1a1d23, stop:1 #161b22);
-                color: #f0f6fc;
-                border: 2px solid #30363d;
-                border-radius: 12px;
-            }
-            QMessageBox QLabel { color: #f0f6fc; font-size: 12px; border: none; background: transparent; }
-            QMessageBox QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #238636, stop:1 #2ea043);
-                color: white; border: none; border-radius: 6px; font-size: 11px; font-weight: bold;
-                padding: 8px 16px; min-width: 80px; margin: 2px;
-            }
-            QMessageBox QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2ea043, stop:1 #238636);
-            }
-            QMessageBox QPushButton[text="Open Folder"] {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #58a6ff, stop:1 #4493f8);
-            }
-        """)
-        
-        open_folder_btn = msg_box.addButton("Open Folder", QMessageBox.ButtonRole.ActionRole)
-        ok_btn = msg_box.addButton(QMessageBox.StandardButton.Ok)
-        
-        msg_box.exec()
-        
-        if msg_box.clickedButton() == open_folder_btn:
-            import os
-            try:
-                full_path = os.path.abspath(output_dir)
-                if os.name == 'nt':
-                    os.startfile(full_path)
-            except Exception as e:
-                QMessageBox.warning(self, "Error", f"Could not open folder:\n{str(e)}")
-
-    def bg_processing_error(self, error_msg):
-        """Handle background removal error"""
-        self.bg_log(f"❌ ERROR: {error_msg}")
-        self.bg_status_label.setText("Error occurred")
-        self.bg_process_btn.setEnabled(True)
-        self.bg_stop_btn.setEnabled(False)
-        QMessageBox.critical(self, "Processing Error", f"An error occurred:\n\n{error_msg}")
-
-    def install_backgroundremover_package(self):
-        """Install the backgroundremover package"""
-        self.bg_log("Installing backgroundremover package...")
-        self.bg_status_label.setText("Installing required package...")
-        
-        def install_worker():
-            try:
-                import subprocess
-                import sys
-                import platform
-                
-                # Check Python version and architecture
-                python_version = sys.version_info
-                architecture = platform.architecture()[0]
-                
-                self.bg_log(f"Python version: {python_version.major}.{python_version.minor}.{python_version.micro}")
-                self.bg_log(f"Architecture: {architecture}")
-                
-                # Try different installation approaches
-                install_commands = [
-                    # First try standard installation
-                    [sys.executable, '-m', 'pip', 'install', 'backgroundremover'],
-                    # If that fails, try with upgrade
-                    [sys.executable, '-m', 'pip', 'install', '--upgrade', 'backgroundremover'],
-                    # Try with no cache
-                    [sys.executable, '-m', 'pip', 'install', '--no-cache-dir', 'backgroundremover'],
-                ]
-                
-                success = False
-                last_error = ""
-                
-                for i, cmd in enumerate(install_commands):
-                    try:
-                        cmd_str = ' '.join(cmd)
-                        self.bg_log(f"Attempt {i+1}: {cmd_str}")
-                        
-                        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-                        
-                        if result.returncode == 0:
-                            success = True
-                            break
-                        else:
-                            last_error = result.stderr or result.stdout
-                            self.bg_log(f"Attempt {i+1} failed: {last_error[:200]}...")
-                    
-                    except subprocess.TimeoutExpired:
-                        self.bg_log(f"Attempt {i+1} timed out")
-                        last_error = "Installation timed out"
-                    except Exception as e:
-                        self.bg_log(f"Attempt {i+1} error: {str(e)}")
-                        last_error = str(e)
-                
-                if success:
-                    QTimer.singleShot(0, lambda: self.bg_log("✅ Package installed successfully"))
-                    QTimer.singleShot(0, lambda: self.bg_status_label.setText("Package installed - ready to process"))
-                    QTimer.singleShot(0, lambda: QMessageBox.information(self, "Success", "backgroundremover package installed successfully!\n\nYou can now remove backgrounds from images."))
-                else:
-                    QTimer.singleShot(0, lambda: self.bg_log(f"❌ All installation attempts failed"))
-                    
-                    # Show comprehensive error dialog with solutions
-                    error_dialog = QMessageBox(self)
-                    error_dialog.setWindowTitle("Installation Failed")
-                    error_dialog.setIcon(QMessageBox.Icon.Critical)
-                    error_dialog.setText("Failed to install backgroundremover package automatically")
-                    error_dialog.setInformativeText(
-                        "The automatic installation failed.\n\n"
-                        "Manual installation options:\n\n"
-                        "Option 1 - Try these commands in order:\n"
-                        "pip install --upgrade pip\n"
-                        "pip install backgroundremover\n\n"
-                        "Option 2 - Use conda (if available):\n"
-                        "conda install -c conda-forge backgroundremover\n\n"
-                        "After installation, restart the application."
-                    )
-                    error_dialog.setDetailedText(f"Last error:\n{last_error}")
-                    
-                    # Apply dark theme
-                    error_dialog.setStyleSheet("""
-                        QMessageBox {
-                            background: #161b22;
-                            color: #f0f6fc;
-                            border: 2px solid #30363d;
-                            border-radius: 12px;
-                        }
-                        QMessageBox QLabel { color: #f0f6fc; font-size: 12px; }
-                        QMessageBox QPushButton {
-                            background: #238636;
-                            color: white; border: none; border-radius: 6px; font-size: 11px; font-weight: bold;
-                            padding: 8px 16px; min-width: 80px; margin: 2px;
-                        }
-                        QMessageBox QPushButton:hover { background: #2ea043; }
-                    """)
-                    
-                    QTimer.singleShot(0, lambda: error_dialog.exec())
-            
-            except Exception as e:
-                error_msg = f"Error during installation: {str(e)}"
-                QTimer.singleShot(0, lambda: self.bg_log(f"❌ {error_msg}"))
-                QTimer.singleShot(0, lambda: QMessageBox.critical(self, "Installation Error", error_msg))
-        
-        import threading
-        thread = threading.Thread(target=install_worker, daemon=True)
-        thread.start()
-
-    # Image Tools Methods
-    def browse_tools_input_files(self):
-        """Browse for input files for image tools"""
-        files, _ = QFileDialog.getOpenFileNames(
-            self, 
-            "Select Images", 
-            "", 
-            "Image Files (*.png *.jpg *.jpeg *.webp *.bmp *.tiff);;All Files (*)"
-        )
-        if files:
-            self.tools_selected_files.extend(files)
-            self.update_tools_file_list()
-
-    def browse_tools_input_folder(self):
-        """Browse for input folder for image tools"""
-        folder = QFileDialog.getExistingDirectory(self, "Select Folder with Images")
-        if folder:
-            import os
-            image_extensions = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tiff'}
-            files = []
-            for root, dirs, filenames in os.walk(folder):
-                for filename in filenames:
-                    if any(filename.lower().endswith(ext) for ext in image_extensions):
-                        files.append(os.path.join(root, filename))
-            
-            self.tools_selected_files.extend(files)
-            self.update_tools_file_list()
-
-    def clear_tools_file_list(self):
-        """Clear the image tools file list"""
-        self.tools_selected_files = []
-        self.update_tools_file_list()
-
-    def update_tools_file_list(self):
-        """Update the image tools file display"""
-        count = len(self.tools_selected_files)
-        if count == 0:
-            self.tools_input_display.setText("")
-            self.tools_input_display.setPlaceholderText("No images selected...")
-            self.tools_file_count_label.setText("0 files selected")
-        elif count == 1:
-            import os
-            self.tools_input_display.setText(os.path.basename(self.tools_selected_files[0]))
-            self.tools_file_count_label.setText("1 file selected")
-        else:
-            self.tools_input_display.setText(f"{count} images selected")
-            self.tools_file_count_label.setText(f"{count} files selected")
-
-    def browse_tools_output_dir(self):
-        """Browse for output directory for image tools"""
-        folder = QFileDialog.getExistingDirectory(self, "Select Output Directory")
-        if folder:
-            self.tools_output_dir.setText(folder)
-
-    def on_tool_changed(self):
-        """Handle tool selection change"""
-        # Update the options button text based on selected tool
-        tool = self.tools_operation.currentText()
-        self.tools_options_btn.setText(f"{tool} Options")
-
-    def show_tools_options_dialog(self):
-        """Show image tools options dialog"""
-        tool = self.tools_operation.currentText()
-        
-        dialog = QDialog(self)
-        dialog.setWindowTitle(f"{tool} Options")
-        dialog.setFixedSize(450, 350)
-        dialog.setStyleSheet("""
-            QDialog {
-                background: #161b22;
-                color: #f0f6fc;
-                border: 1px solid #30363d;
-                border-radius: 12px;
-            }
-            QLabel {
-                color: #f0f6fc;
-                font-size: 12px;
-                border: none;
-                background: transparent;
-            }
-            QCheckBox {
-                color: #f0f6fc;
-                font-size: 12px;
-                spacing: 8px;
-            }
-            QCheckBox::indicator {
-                width: 18px;
-                height: 18px;
-                border: 2px solid #30363d;
-                border-radius: 4px;
-                background: #21262d;
-            }
-            QCheckBox::indicator:checked {
-                background: #238636;
-                border-color: #238636;
-            }
-            QSpinBox, QLineEdit, QComboBox {
-                background: #21262d;
-                color: #f0f6fc;
-                border: 1px solid #30363d;
-                border-radius: 6px;
-                padding: 4px 10px;
-                font-size: 13px;
-                min-height: 32px;
-            }
-        """)
-        
-        layout = QVBoxLayout(dialog)
-        layout.setSpacing(20)
-        layout.setContentsMargins(25, 25, 25, 25)
-        
-        # Title
-        title = QLabel(f"{tool} Options")
-        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #58a6ff;")
-        layout.addWidget(title)
-        
-        # Options based on tool
-        options_layout = QVBoxLayout()
-        options_layout.setSpacing(15)
-        
-        if tool == "Resize Images":
-            # Width and height
-            size_row = QHBoxLayout()
-            size_row.addWidget(QLabel("Size:"))
-            
-            width_spin = QSpinBox()
-            width_spin.setRange(1, 10000)
-            width_spin.setValue(self._tools_settings['resize_width'])
-            width_spin.setSuffix(" px")
-            size_row.addWidget(width_spin)
-            
-            size_row.addWidget(QLabel("×"))
-            
-            height_spin = QSpinBox()
-            height_spin.setRange(1, 10000)
-            height_spin.setValue(self._tools_settings['resize_height'])
-            height_spin.setSuffix(" px")
-            size_row.addWidget(height_spin)
-            
-            size_row.addStretch()
-            options_layout.addLayout(size_row)
-            
-            maintain_cb = QCheckBox("Maintain aspect ratio")
-            maintain_cb.setChecked(self._tools_settings['maintain_aspect'])
-            options_layout.addWidget(maintain_cb)
-            
-        elif tool == "Convert Format":
-            format_row = QHBoxLayout()
-            format_row.addWidget(QLabel("Convert to:"))
-            
-            format_combo = QComboBox()
-            format_combo.addItems(["PNG", "JPEG", "WEBP", "BMP", "TIFF"])
-            format_combo.setCurrentText(self._tools_settings['convert_format'])
-            format_row.addWidget(format_combo)
-            format_row.addStretch()
-            options_layout.addLayout(format_row)
-            
-        elif tool == "Compress Images":
-            quality_row = QHBoxLayout()
-            quality_row.addWidget(QLabel("Quality:"))
-            
-            quality_spin = QSpinBox()
-            quality_spin.setRange(1, 100)
-            quality_spin.setValue(self._tools_settings['compress_quality'])
-            quality_spin.setSuffix("%")
-            quality_row.addWidget(quality_spin)
-            quality_row.addStretch()
-            options_layout.addLayout(quality_row)
-            
-        else:
-            # For other tools, show a coming soon message
-            coming_soon = QLabel(f"{tool} options will be available in the next update!")
-            coming_soon.setStyleSheet("color: #7d8590; font-style: italic;")
-            options_layout.addWidget(coming_soon)
-        
-        layout.addLayout(options_layout)
-        layout.addStretch()
-        
-        # Buttons
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        
-        def save_and_close():
-            if tool == "Resize Images":
-                self._tools_settings['resize_width'] = width_spin.value()
-                self._tools_settings['resize_height'] = height_spin.value()
-                self._tools_settings['maintain_aspect'] = maintain_cb.isChecked()
-            elif tool == "Convert Format":
-                self._tools_settings['convert_format'] = format_combo.currentText()
-            elif tool == "Compress Images":
-                self._tools_settings['compress_quality'] = quality_spin.value()
-            dialog.accept()
-        
-        save_btn = QPushButton("Save")
-        save_btn.setFixedSize(100, 36)
-        save_btn.clicked.connect(save_and_close)
-        save_btn.setStyleSheet("""
-            QPushButton {
-                background: #238636;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                font-size: 13px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background: #2ea043;
-            }
-        """)
-        btn_layout.addWidget(save_btn)
-        
-        layout.addLayout(btn_layout)
-        
-        dialog.exec()
-
-    def setup_resize_options(self):
-        """Setup resize options"""
-        # Width and height
-        size_row = QHBoxLayout()
-        size_row.addWidget(self.create_label("Size:"))
-        
-        self.resize_width = QSpinBox()
-        self.resize_width.setRange(1, 10000)
-        self.resize_width.setValue(800)
-        self.resize_width.setSuffix(" px")
-        self.style_spinbox(self.resize_width)
-        size_row.addWidget(self.resize_width)
-        
-        size_row.addWidget(self.create_label("×"))
-        
-        self.resize_height = QSpinBox()
-        self.resize_height.setRange(1, 10000)
-        self.resize_height.setValue(600)
-        self.resize_height.setSuffix(" px")
-        self.style_spinbox(self.resize_height)
-        size_row.addWidget(self.resize_height)
-        
-        self.maintain_aspect = QCheckBox("Maintain aspect ratio")
-        self.maintain_aspect.setChecked(True)
-        self.maintain_aspect.setStyleSheet("""
-            QCheckBox { color: #f0f6fc; font-size: 12px; spacing: 8px; }
-            QCheckBox::indicator { width: 16px; height: 16px; border: 2px solid #30363d; border-radius: 3px; background: #21262d; }
-            QCheckBox::indicator:checked { background: #238636; border-color: #238636; }
-        """)
-        size_row.addWidget(self.maintain_aspect)
-        
-        size_row.addStretch()
-        self.tools_options_layout.addLayout(size_row)
-
-    def setup_convert_options(self):
-        """Setup format conversion options"""
-        format_row = QHBoxLayout()
-        format_row.addWidget(self.create_label("Convert to:"))
-        
-        self.convert_format = QComboBox()
-        self.convert_format.addItems(["PNG", "JPEG", "WEBP", "BMP", "TIFF"])
-        self.convert_format.setFixedHeight(32)
-        self.style_combo(self.convert_format)
-        format_row.addWidget(self.convert_format)
-        
-        format_row.addStretch()
-        self.tools_options_layout.addLayout(format_row)
-
-    def setup_compress_options(self):
-        """Setup compression options"""
-        quality_row = QHBoxLayout()
-        quality_row.addWidget(self.create_label("Quality:"))
-        
-        self.compress_quality = QSpinBox()
-        self.compress_quality.setRange(1, 100)
-        self.compress_quality.setValue(85)
-        self.compress_quality.setSuffix("%")
-        self.style_spinbox(self.compress_quality)
-        quality_row.addWidget(self.compress_quality)
-        
-        quality_row.addStretch()
-        self.tools_options_layout.addLayout(quality_row)
-
-    def setup_watermark_options(self):
-        """Setup watermark options"""
-        text_row = QHBoxLayout()
-        text_row.addWidget(self.create_label("Text:"))
-        
-        self.watermark_text = QLineEdit()
-        self.watermark_text.setPlaceholderText("Enter watermark text...")
-        self.watermark_text.setFixedHeight(32)
-        self.style_input(self.watermark_text)
-        text_row.addWidget(self.watermark_text)
-        
-        self.tools_options_layout.addLayout(text_row)
-
-    def setup_rotate_options(self):
-        """Setup rotation options"""
-        angle_row = QHBoxLayout()
-        angle_row.addWidget(self.create_label("Angle:"))
-        
-        self.rotate_angle = QSpinBox()
-        self.rotate_angle.setRange(-360, 360)
-        self.rotate_angle.setValue(90)
-        self.rotate_angle.setSuffix("°")
-        self.style_spinbox(self.rotate_angle)
-        angle_row.addWidget(self.rotate_angle)
-        
-        angle_row.addStretch()
-        self.tools_options_layout.addLayout(angle_row)
-
-    def setup_thumbnail_options(self):
-        """Setup thumbnail options"""
-        size_row = QHBoxLayout()
-        size_row.addWidget(self.create_label("Thumbnail size:"))
-        
-        self.thumb_size = QSpinBox()
-        self.thumb_size.setRange(50, 1000)
-        self.thumb_size.setValue(150)
-        self.thumb_size.setSuffix(" px")
-        self.style_spinbox(self.thumb_size)
-        size_row.addWidget(self.thumb_size)
-        
-        size_row.addStretch()
-        self.tools_options_layout.addLayout(size_row)
-
-    def setup_rename_options(self):
-        """Setup batch rename options"""
-        pattern_row = QHBoxLayout()
-        pattern_row.addWidget(self.create_label("Pattern:"))
-        
-        self.rename_pattern = QLineEdit()
-        self.rename_pattern.setPlaceholderText("e.g., image_{number}")
-        self.rename_pattern.setText("image_{number}")
-        self.rename_pattern.setFixedHeight(32)
-        self.style_input(self.rename_pattern)
-        pattern_row.addWidget(self.rename_pattern)
-        
-        self.tools_options_layout.addLayout(pattern_row)
-
-    def process_image_tools(self):
-        """Process images with selected tool"""
-        if not self.tools_selected_files:
-            QMessageBox.warning(self, "Warning", "Please select images to process")
-            return
-        
-        tool = self.tools_operation.currentText()
-        output_dir = self.tools_output_dir.text().strip()
-        if not output_dir:
-            output_dir = "downloads/processed_images"
-        
-        # Start processing
-        self.tools_processing_stopped = False
-        self.tools_process_btn.setEnabled(False)
-        self.tools_stop_btn.setEnabled(True)
-        self.tools_status_label.setText(f"Processing with {tool}...")
-        self.tools_progress_bar.setMaximum(len(self.tools_selected_files))
-        self.tools_progress_bar.setValue(0)
-        self.tools_log_text.clear()
-        
-        self.tools_log(f"=== Starting {tool} for {len(self.tools_selected_files)} images ===")
-        self.tools_log(f"Output directory: {output_dir}")
-        
-        # Process in background thread
-        def process_worker():
-            try:
-                import os
-                from pathlib import Path
-                from PIL import Image
-                
-                # Create output directory
-                Path(output_dir).mkdir(parents=True, exist_ok=True)
-                
-                successful = 0
-                failed = 0
-                
-                for i, file_path in enumerate(self.tools_selected_files):
-                    if self.tools_processing_stopped:
-                        QTimer.singleShot(0, lambda: self.tools_log("Stopped by user"))
-                        break
-                    
-                    # Update progress
-                    QTimer.singleShot(0, lambda i=i+1: self.tools_progress_bar.setValue(i))
-                    QTimer.singleShot(0, lambda i=i+1: self.tools_status_label.setText(f"Processing {i}/{len(self.tools_selected_files)}..."))
-                    
-                    filename = os.path.basename(file_path)
-                    QTimer.singleShot(0, lambda f=filename: self.tools_log(f"Processing: {f}"))
-                    
-                    try:
-                        # Load image
-                        input_image = Image.open(file_path)
-                        
-                        # Process based on tool
-                        if tool == "Resize Images":
-                            width = self.resize_width.value()
-                            height = self.resize_height.value()
-                            if self.maintain_aspect.isChecked():
-                                input_image.thumbnail((width, height), Image.Resampling.LANCZOS)
-                                output_image = input_image
-                            else:
-                                output_image = input_image.resize((width, height), Image.Resampling.LANCZOS)
-                        else:
-                            # For other tools, just copy for now
-                            output_image = input_image
-                        
-                        # Save result
-                        name, ext = os.path.splitext(filename)
-                        if tool == "Convert Format":
-                            new_format = self.convert_format.currentText().lower()
-                            if new_format == "jpeg":
-                                ext = ".jpg"
-                            else:
-                                ext = f".{new_format}"
-                        
-                        output_filename = f"{name}_processed{ext}"
-                        output_path = os.path.join(output_dir, output_filename)
-                        
-                        # Handle format conversion
-                        if tool == "Convert Format":
-                            format_name = self.convert_format.currentText()
-                            if format_name == "JPEG" and output_image.mode in ("RGBA", "LA", "P"):
-                                # Convert to RGB for JPEG
-                                rgb_image = Image.new("RGB", output_image.size, (255, 255, 255))
-                                rgb_image.paste(output_image, mask=output_image.split()[-1] if output_image.mode == "RGBA" else None)
-                                output_image = rgb_image
-                            output_image.save(output_path, format=format_name)
-                        else:
-                            output_image.save(output_path)
-                        
-                        successful += 1
-                        QTimer.singleShot(0, lambda f=output_filename: self.tools_log(f"✅ Saved: {f}"))
-                        
-                    except Exception as e:
-                        failed += 1
-                        QTimer.singleShot(0, lambda f=filename, e=str(e): self.tools_log(f"❌ Failed {f}: {e}"))
-                
-                # Complete
-                QTimer.singleShot(0, lambda: self.tools_processing_complete(successful, failed, output_dir))
-                
-            except Exception as e:
-                QTimer.singleShot(0, lambda e=str(e): self.tools_processing_error(e))
-        
-        import threading
-        thread = threading.Thread(target=process_worker, daemon=True)
-        thread.start()
-
-    def stop_tools_processing(self):
-        """Stop image tools processing"""
-        self.tools_processing_stopped = True
-
-    def tools_log(self, message):
-        """Log message to image tools log"""
-        self.tools_log_text.append(message)
-        scrollbar = self.tools_log_text.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
-        QApplication.processEvents()
-
-    def tools_processing_complete(self, successful, failed, output_dir):
-        """Handle completion of image tools processing"""
-        self.tools_log("")
-        self.tools_log(f"=== Processing Complete ===")
-        self.tools_log(f"Successful: {successful}")
-        self.tools_log(f"Failed: {failed}")
-        
-        self.tools_status_label.setText("Processing complete")
-        self.tools_progress_bar.setValue(self.tools_progress_bar.maximum())
-        self.tools_process_btn.setEnabled(True)
-        self.tools_stop_btn.setEnabled(False)
-        
-        # Show completion dialog
-        msg_box = QMessageBox(self)
-        msg_box.setWindowTitle("Image Processing Complete")
-        msg_box.setText("Image processing finished!")
-        msg_box.setInformativeText(f"Successful: {successful}\nFailed: {failed}\n\nFiles saved to: {output_dir}")
-        msg_box.setIcon(QMessageBox.Icon.Information)
-        
-        # Apply dark theme
-        msg_box.setStyleSheet("""
-            QMessageBox {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1a1d23, stop:1 #161b22);
-                color: #f0f6fc;
-                border: 2px solid #30363d;
-                border-radius: 12px;
-            }
-            QMessageBox QLabel { color: #f0f6fc; font-size: 12px; border: none; background: transparent; }
-            QMessageBox QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #238636, stop:1 #2ea043);
-                color: white; border: none; border-radius: 6px; font-size: 11px; font-weight: bold;
-                padding: 8px 16px; min-width: 80px; margin: 2px;
-            }
-            QMessageBox QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2ea043, stop:1 #238636);
-            }
-            QMessageBox QPushButton[text="Open Folder"] {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #58a6ff, stop:1 #4493f8);
-            }
-        """)
-        
-        open_folder_btn = msg_box.addButton("Open Folder", QMessageBox.ButtonRole.ActionRole)
-        ok_btn = msg_box.addButton(QMessageBox.StandardButton.Ok)
-        
-        msg_box.exec()
-        
-        if msg_box.clickedButton() == open_folder_btn:
-            import os
-            try:
-                full_path = os.path.abspath(output_dir)
-                if os.name == 'nt':
-                    os.startfile(full_path)
-            except Exception as e:
-                QMessageBox.warning(self, "Error", f"Could not open folder:\n{str(e)}")
-
-    def tools_processing_error(self, error_msg):
-        """Handle image tools processing error"""
-        self.tools_log(f"❌ ERROR: {error_msg}")
-        self.tools_status_label.setText("Error occurred")
-        self.tools_process_btn.setEnabled(True)
-        self.tools_stop_btn.setEnabled(False)
-        QMessageBox.critical(self, "Processing Error", f"An error occurred:\n\n{error_msg}")
-
 
 def main():
-    # Configure console encoding for better Unicode support
-    import sys
-    import os
-    
-    # Set UTF-8 encoding for console output on Windows
-    if os.name == 'nt':  # Windows
-        try:
-            # Try to set console to UTF-8
-            os.system('chcp 65001 >nul 2>&1')
-        except:
-            pass
-    
     app = QApplication(sys.argv)
     app.setApplicationName("VIDT - Video Downloader Tool")
     

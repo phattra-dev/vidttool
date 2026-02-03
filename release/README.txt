@@ -8,9 +8,11 @@ WHAT'S NEW IN v1.2.1:
 ✓ FIX: TikTok caption-based filenames now working properly
 ✓ FIX: Resolved 'VideoDownloader' object has no attribute '_clean_tiktok_caption_for_filename' error
 ✓ FIX: Added missing 're' import for TikTok caption processing
+✓ FIX: Resolved Python DLL loading errors with improved build configuration
 ✓ IMPROVE: TikTok filenames now use spaces instead of underscores
 ✓ IMPROVE: Hashtags (#fyp, #viral) are preserved in TikTok filenames
 ✓ IMPROVE: Better caption cleaning removes mentions and URLs while keeping hashtags
+✓ IMPROVE: More stable executable with directory-based distribution
 
 INSTALLATION:
 ------------

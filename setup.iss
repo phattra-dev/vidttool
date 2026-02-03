@@ -3,7 +3,7 @@
 ; Run with Inno Setup Compiler to create installer
 
 #define MyAppName "VIDT"
-#define MyAppVersion "1.2.1"
+#define MyAppVersion "1.2.2"
 #define MyAppPublisher "VIDT"
 #define MyAppURL "https://github.com/phattra-dev/vidttool"
 #define MyAppExeName "VIDT.exe"
@@ -45,8 +45,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-; Main executable
-Source: "dist\VIDT.exe"; DestDir: "{app}"; Flags: ignoreversion
+; Main executable and all dependencies
+Source: "dist\VIDT\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 ; Start Menu
