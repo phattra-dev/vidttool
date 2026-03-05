@@ -1,21 +1,23 @@
 {
     "name": "VIDT",
-    "version": "1.2.5",
-    "release_date": "2026-03-02",
-    "download_url": "https://github.com/phattra-dev/vidttool/releases/download/v1.2.5/VIDT_Setup_1.2.5.exe",
-    "exe_url": "https://github.com/phattra-dev/vidttool/releases/download/v1.2.5/VIDT.exe",
+    "version": "1.2.6",
+    "release_date": "2026-03-05",
+    "download_url": "https://github.com/phattra-dev/vidttool/releases/download/v1.2.6/VIDT_Setup_1.2.6.exe",
+    "exe_url": "https://github.com/phattra-dev/vidttool/releases/download/v1.2.6/VIDT.exe",
     "changelog": [
-        "✂️ NEW: Enhanced video trimming with time input (HH:MM:SS format)",
-        "⚡ NEW: Quick presets dialog for speed and volume adjustments",
-        "🎯 NEW: Export presets for common scenarios (Social Media, High Quality, etc.)",
-        "� NEW: Real-time batch processing progress with ETA and time tracking",
-        "✅ NEW: Enable/disable checkboxes for speed and volume changes",
-        "✅ IMPROVED: Trim duration calculator with visual feedback",
-        "✅ IMPROVED: Processing time display for each video",
-        "✅ IMPROVED: Cleaner sidebar layout with preset dialogs",
-        "PREVIOUS: Independent text watermark and logo support",
-        "PREVIOUS: Timestamped subfolder creation for organized editing"
+        "🎨 NEW: Professional FontAwesome icons throughout the app (replaced all emojis)",
+        "📐 NEW: Compact left sidebar design for more workspace",
+        "🎨 NEW: Redesigned Shape Tools dialog with modern styling",
+        "🎨 NEW: Redesigned Layer Order dialog with professional appearance",
+        "📍 NEW: Fixed floating toolbar position (stays at top-right)",
+        "🔧 FIXED: Crop feature now works correctly with all overlay elements",
+        "🔧 FIXED: Layer ordering works properly with cropped videos",
+        "🔧 FIXED: Profile download limit increased to 5000 videos",
+        "🔧 FIXED: Eliminated white window flash on startup",
+        "🔧 FIXED: App now exits cleanly and returns to terminal",
+        "⚡ IMPROVED: Faster startup with optimized window initialization",
+        "⚡ IMPROVED: Better memory management during profile extraction"
     ],
     "min_os": "Windows 10",
-    "file_size": "~58MB"
+    "file_size": "~60MB"
 }
